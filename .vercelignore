@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+.env.local
+firebase-blueprint.json
+DRAFT_firestore.rules
+firestore.rules.test.ts
+metadata.json
+scripts

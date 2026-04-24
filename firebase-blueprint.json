@@ -1,0 +1,26 @@
+{
+  "entities": {
+    "LessonPlan": {
+      "title": "Lesson Plan",
+      "description": "A shared weekly lesson plan.",
+      "type": "object",
+      "properties": {
+        "form": { "type": "object", "description": "The lesson plan configuration and metadata" },
+        "plan": { "type": "object", "description": "The generated periods and SLOs" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "isPublic": { "type": "boolean", "default": true }
+      },
+      "required": ["form", "plan", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/lessonPlans/{planId}": {
+      "schema": "LessonPlan",
+      "description": "Collection of shared lesson plans."
+    },
+    "/archivedPlans/{planId}": {
+      "schema": "LessonPlan",
+      "description": "Private collection of stored lesson plans for users."
+    }
+  }
+}

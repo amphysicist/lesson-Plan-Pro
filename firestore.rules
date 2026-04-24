@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidLessonPlan(data) {
+      return data.keys().hasAll(['form', 'plan', 'authorId', 'authorName', 'createdAt']) &&
+             data.form is map &&
+             data.plan is map &&
+             data.authorId is string &&
+             data.authorName is string &&
+             data.createdAt == request.time;
+    }
+
+    match /lessonPlans/{planId} {
+      allow read: if true; // Publicly shared
+      allow create: if isSignedIn() && isValidLessonPlan(request.resource.data) && 
+                      request.resource.data.authorId == (request.auth.uid == null ? 'anonymous' : request.auth.uid);
+      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.authorId;
+    }
+
+    match /archivedPlans/{planId} {
+      allow read: if isSignedIn() && resource.data.authorId == request.auth.uid;
+      allow create: if isSignedIn() && isValidLessonPlan(request.resource.data) && 
+                      request.resource.data.authorId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.authorId == request.auth.uid;
+    }
+  }
+}

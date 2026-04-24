@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Google AI Studio App</title>
+    <script>
+      // HACK: Fix for "Cannot set property fetch of #<Window> which has only a getter"
+      // This MUST run before any ES modules (which are hoisted) to catch early polyfill attempts.
+      (function() {
+        window.addEventListener('error', function(event) {
+          if (event.message && (event.message.indexOf('Cannot set property fetch') !== -1 || event.message.indexOf('set fetch') !== -1)) {
+            event.preventDefault();
+            console.warn('Silenced fetch polyfill error:', event.message);
+          }
+        });
+
+        try {
+          var originalFetch = window.fetch;
+          try {
+            Object.defineProperty(window, 'fetch', {
+              value: originalFetch,
+              writable: true,
+              configurable: true,
+              enumerable: true
+            });
+          } catch (e) {
+            var descriptor = Object.getOwnPropertyDescriptor(window, 'fetch');
+            if (descriptor && descriptor.get && !descriptor.set) {
+              Object.defineProperty(window, 'fetch', {
+                get: function() { return originalFetch; },
+                set: function(v) { console.warn('Ignored attempt to overwrite window.fetch', v); },
+                configurable: true,
+                enumerable: true
+              });
+            }
+          }
+        } catch (e) {
+          console.error('Failed to patch window.fetch:', e);
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

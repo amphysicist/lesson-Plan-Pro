@@ -1,0 +1,307 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-serif: 'Georgia', 'Playfair Display', serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --color-natural-bg: #F9F7F2;
+  --color-natural-paper: #FFFFFF;
+  --color-natural-ink: #3D3A35;
+  --color-natural-ink-light: #7A756D;
+  --color-natural-sage: #8DA08A;
+  --color-natural-clay: #CB997E;
+  --color-natural-sand: #DDBEA9;
+  --color-natural-border: #E8E4DB;
+  
+  --shadow-natural: 0 4px 12px rgba(61, 58, 53, 0.05);
+
+  --color-natural-bg-dark: #121212;
+  --color-natural-paper-dark: #1E1E1E;
+  --color-natural-ink-dark: #E4E4E4;
+  --color-natural-ink-light-dark: #A1A1A1;
+  --color-natural-border-dark: #2D2D2D;
+}
+
+@layer base {
+  body {
+    @apply bg-natural-bg dark:bg-natural-bg-dark text-natural-ink dark:text-natural-ink-dark font-sans antialiased transition-colors duration-300;
+  }
+}
+
+@layer utilities {
+  .lp-print-container {
+    background: white;
+    font-family: Arial, sans-serif;
+    font-size: 12pt;
+    color: #000000;
+    line-height: 1.4;
+  }
+  
+  .lp-print-container * {
+    color: #000000 !important;
+  }
+  
+  .lp-print-container table {
+    table-layout: fixed;
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .lp-print-container th, 
+  .lp-print-container td {
+    vertical-align: top;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .lp-print-container ul {
+    list-style-type: disc !important;
+    padding-left: 1.2rem !important;
+    margin: 0.5rem 0 !important;
+  }
+  
+  .lp-print-container ol {
+    list-style-type: decimal !important;
+    padding-left: 1.2rem !important;
+    margin: 0.5rem 0 !important;
+  }
+
+  .lp-sig-line {
+    border-bottom: 1px solid black;
+    display: inline-block;
+    width: 140px;
+    margin-left: 4px;
+  }
+  
+  /* Fix for html2canvas oklab issues by forcing standard color space and hex colors for printable areas */
+  .lp-print-container, #lecture-page, #lecture-page * {
+    color-scheme: light !important;
+    border-color: #E8E4DB !important; /* Force hex border */
+  }
+
+  #lecture-page .border-black {
+    border-color: #000000 !important;
+  }
+
+  .objective-card-edge {
+    @apply border-l-4 border-natural-sand bg-[#FDFBFA] p-4;
+  }
+}
+
+/* Interactive Table Styles */
+.lp-resizer {
+  position: absolute;
+  background: transparent;
+  z-index: 10;
+  transition: background 0.2s;
+}
+
+.lp-resizer:hover, .lp-resizer.resizing {
+  background: rgba(59, 130, 246, 0.4);
+}
+
+.lp-col-resizer {
+  right: -2px;
+  top: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.lp-row-resizer {
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 5px;
+  cursor: row-resize;
+}
+
+.lp-cell-active {
+  outline: 2px solid #bfdbfe !important; /* Very light blue border */
+  z-index: 5;
+}
+
+.no-print .hover-border-hint:hover {
+  outline: 1px dashed #3b82f6;
+}
+
+.grid-controls-menu {
+  animation: scaleUp 0.15s ease-out;
+}
+
+@keyframes scaleUp {
+  from { transform: scale(0.9); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+@media print {
+  .no-print,
+  .no-print *,
+  header,
+  footer:not(.print-footer),
+  button,
+  .grid-controls-menu,
+  section:not(.lp-print-container),
+  aside {
+    display: none !important;
+  }
+  
+  body {
+    background: white !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    color: black !important;
+  }
+  
+  main {
+    max-width: none !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* PDF Export Specific Adjustments */
+  .lp-print-container {
+    width: 210mm !important; /* Fixed A4 Width for stable capture */
+    min-height: 297mm !important;
+    padding: 10mm !important; /* Internal margins for pixel-perfect PDF */
+    margin: 0 auto !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: white !important;
+    overflow: visible !important;
+    height: auto !important;
+    display: block !important;
+    box-sizing: border-box !important;
+  }
+
+  .lp-print-container * {
+    box-sizing: border-box !important;
+  }
+
+  /* Robust Headers & Titles */
+  .lp-print-container header, 
+  .lp-print-container .header-section {
+    display: flex !important;
+    flex-direction: row !important;
+    width: 100% !important;
+  }
+
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    background: transparent !important;
+    table-layout: fixed !important;
+    page-break-inside: auto !important;
+    border-spacing: 0 !important;
+    overflow: visible !important;
+    border: 1px solid black !important;
+  }
+
+  th, td {
+    border: 1px solid black !important;
+    background: transparent !important;
+    color: black !important;
+    word-wrap: break-word !important;
+    overflow-wrap: break-word !important;
+    white-space: normal !important;
+    vertical-align: top !important;
+    padding: 6px 4px !important;
+    min-height: 48px !important;
+    position: relative !important;
+    font-size: 9.5pt !important; /* Slightly smaller for better fit */
+  }
+
+  /* Force borders even if they match background */
+  th {
+    font-weight: bold !important;
+    background-color: #f3f4f6 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  tr {
+    page-break-inside: avoid !important;
+    page-break-after: auto !important;
+    break-inside: avoid !important;
+  }
+
+  tbody tr:nth-of-type(even) {
+    background-color: rgba(0,0,0,0.02) !important;
+  }
+
+  @page {
+    margin: 0; /* Let application handle margins for pixel perfection */
+    size: A4 portrait;
+  }
+
+  /* Reset any colorful backgrounds for ink saving */
+  .bg-[#f3f4f6], 
+  .bg-[#f9fafb],
+  .bg-yellow-50\/10,
+  .bg-yellow-50\/30 {
+    background-color: transparent !important;
+  }
+
+  /* Specific styles for the Lecture Script Page when printing */
+  #lecture-page {
+    font-family: Arial, sans-serif !important;
+    font-size: 12pt !important;
+    color: black !important;
+    padding: 2.54cm !important; /* Standard 1 inch (2.54cm) margins */
+    background: white !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    display: block !important;
+  }
+
+  #lecture-page * {
+    font-family: Arial, sans-serif !important;
+    color: black !important;
+    line-height: 1.5 !important;
+    font-weight: normal !important; /* Default to normal */
+    font-size: 12pt !important;
+  }
+
+  /* Bold Headings only */
+  #lecture-page h1,
+  #lecture-page h2,
+  #lecture-page h3,
+  #lecture-page h4,
+  #lecture-page .font-bold {
+    font-weight: bold !important;
+  }
+
+  #lecture-page h1 { font-size: 18pt !important; margin-bottom: 12pt !important; text-align: center; }
+  #lecture-page h3 { font-size: 14pt !important; margin-top: 20pt !important; }
+  #lecture-page h4 { font-size: 12.5pt !important; margin-top: 15pt !important; text-transform: uppercase !important; }
+
+  #lecture-page section {
+    margin-bottom: 24pt !important;
+    page-break-inside: avoid !important;
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+  }
+
+  #lecture-page .bg-natural-ink,
+  #lecture-page .bg-natural-clay,
+  #lecture-page .bg-natural-sage {
+    background-color: transparent !important;
+    color: black !important;
+    border: 1px solid #ccc !important;
+  }
+
+  #lecture-page .rounded-[40px],
+  #lecture-page .rounded-[32px] {
+    border-radius: 0 !important;
+  }
+
+  #lecture-page .italic {
+    font-style: italic !important;
+  }
+}
+
