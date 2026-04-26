@@ -104,7 +104,7 @@
   }
 
   .objective-card-edge {
-    @apply border-l-4 border-natural-sand bg-[#FDFBFA] p-4;
+    @apply border-l-4 border-natural-sand bg-natural-paper dark:bg-natural-paper-dark p-4;
   }
 }
 

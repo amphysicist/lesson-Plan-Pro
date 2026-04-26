@@ -628,23 +628,27 @@ export default function App() {
     const weekNum = parseInt(weekStr.replace("Week ", ""));
     if (isNaN(weekNum)) return null;
 
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = now.getMonth(); 
-    
-    // Find first Monday of the current month
-    let date = new Date(year, month, 1);
-    while (date.getDay() !== 1) { 
-      date.setDate(date.getDate() + 1);
-    }
+    // Session 2026-27 starts on April 6, 2026
+    const sessionStart = new Date(2026, 3, 6);
     
     // Calculate Monday of target week
-    const start = new Date(year, month, date.getDate() + (weekNum - 1) * 7);
-    const end = new Date(year, month, start.getDate() + 4);
+    const start = new Date(sessionStart);
+    start.setDate(sessionStart.getDate() + (weekNum - 1) * 7);
     
+    const end = new Date(start);
+    end.setDate(start.getDate() + 4); // Friday
+    
+    // Adjust for UTC/Local mismatch by using local date parts for ISO string
+    const toISO = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    };
+
     return {
-      from: start.toISOString().split('T')[0],
-      to: end.toISOString().split('T')[0]
+      from: toISO(start),
+      to: toISO(end)
     };
   };
 
@@ -1078,7 +1082,7 @@ ${lectureScript.summary}
             <div className="relative">
               <button 
                 onClick={() => setLectureExportMenuOpen(!lectureExportMenuOpen)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-natural-ink dark:bg-natural-ink-dark text-white dark:text-natural-ink rounded-full font-bold shadow-md hover:bg-natural-ink/90 dark:hover:bg-natural-ink-dark/90 hover:-translate-y-0.5 transition-all text-xs group"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-natural-ink dark:bg-natural-ink-dark text-white dark:text-natural-bg-dark rounded-full font-bold shadow-md hover:bg-natural-ink/90 dark:hover:bg-natural-ink-dark/90 hover:-translate-y-0.5 transition-all text-xs group"
               >
                 <Download className="w-3.5 h-3.5 group-hover:animate-bounce" />
                 Export
@@ -1144,7 +1148,7 @@ ${lectureScript.summary}
                         onClick={handleLectureExportWord}
                         className="flex items-center gap-3 w-full px-4 py-3 text-left hover:bg-natural-ink/5 dark:hover:bg-natural-ink-dark/10 rounded-xl transition-colors group"
                       >
-                        <div className="w-8 h-8 bg-natural-ink/10 dark:bg-natural-ink-dark/20 rounded-lg flex items-center justify-center text-natural-ink dark:text-natural-ink-dark group-hover:bg-natural-ink dark:group-hover:bg-natural-ink-dark group-hover:text-white transition-all">
+                        <div className="w-8 h-8 bg-natural-ink/10 dark:bg-natural-ink-dark/20 rounded-lg flex items-center justify-center text-natural-ink dark:text-natural-ink-dark group-hover:bg-natural-ink dark:group-hover:bg-natural-ink-dark group-hover:text-white dark:group-hover:text-natural-bg-dark transition-all">
                           <FileWord className="w-4 h-4" />
                         </div>
                         <div className="flex flex-col">
@@ -1276,7 +1280,7 @@ ${lectureScript.summary}
           >
             <History className="w-3.5 h-3.5" />
             {archivedPlans.length > 0 && (
-              <span className="w-4 h-4 bg-natural-sage text-white text-[9px] rounded-full flex items-center justify-center">
+              <span className="w-4 h-4 bg-natural-sage text-white dark:text-natural-bg-dark text-[9px] rounded-full flex items-center justify-center">
                 {archivedPlans.length}
               </span>
             )}
@@ -1287,7 +1291,7 @@ ${lectureScript.summary}
             onClick={() => setIsEditing(!isEditing)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-bold text-xs transition-all shadow-sm ${
               isEditing 
-                ? "bg-natural-sage text-white shadow-md" 
+                ? "bg-natural-sage text-white dark:text-natural-bg-dark shadow-md" 
                 : "bg-white dark:bg-natural-paper-dark border border-natural-border dark:border-natural-border-dark text-natural-ink-light dark:text-natural-ink-light-dark"
             }`}
           >
@@ -1297,7 +1301,7 @@ ${lectureScript.summary}
 
           <button 
             onClick={handleNew}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-natural-ink text-white rounded-full font-bold text-xs shadow-natural hover:shadow-md transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-natural-ink dark:bg-natural-ink-dark text-white dark:text-natural-bg-dark rounded-full font-bold text-xs shadow-natural hover:shadow-md transition-all"
           >
             <RotateCcw className="w-3.5 h-3.5" /> New Plan
           </button>
@@ -1306,7 +1310,7 @@ ${lectureScript.summary}
             <div className="relative">
               <button 
                 onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-natural-ink text-white rounded-full font-bold shadow-natural hover:shadow-md transition-all text-xs group"
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-natural-ink dark:bg-natural-ink-dark text-white dark:text-natural-bg-dark rounded-full font-bold shadow-natural hover:shadow-md transition-all text-xs group"
               >
                 <Download className="w-3.5 h-3.5 group-hover:animate-bounce" />
                 Export
@@ -1359,7 +1363,7 @@ ${lectureScript.summary}
                         onClick={() => { handleExportWord(); setExportMenuOpen(false); }}
                         className="flex items-center gap-3 w-full px-4 py-2 text-left hover:bg-natural-ink/5 dark:hover:bg-natural-ink-dark/10 rounded-xl transition-colors group"
                       >
-                        <div className="w-8 h-8 bg-natural-ink/10 dark:bg-natural-ink-dark/20 rounded-lg flex items-center justify-center text-natural-ink dark:text-natural-ink-dark group-hover:bg-natural-ink dark:group-hover:bg-natural-ink-dark group-hover:text-white transition-all">
+                        <div className="w-8 h-8 bg-natural-ink/10 dark:bg-natural-ink-dark/20 rounded-lg flex items-center justify-center text-natural-ink dark:text-natural-ink-dark group-hover:bg-natural-ink dark:group-hover:bg-natural-ink-dark group-hover:text-white dark:group-hover:text-natural-bg-dark transition-all">
                           <FileWord className="w-4 h-4" />
                         </div>
                         <div className="flex flex-col">
@@ -1404,7 +1408,7 @@ ${lectureScript.summary}
 
               <button 
                 onClick={copyShareLink}
-                className="px-6 py-3 bg-natural-sage text-white rounded-full font-bold flex items-center gap-2 hover:bg-natural-sage/80 transition-colors shrink-0 text-sm whitespace-nowrap"
+                className="px-6 py-3 bg-natural-sage text-white dark:text-natural-bg-dark rounded-full font-bold flex items-center gap-2 hover:bg-natural-sage/80 transition-colors shrink-0 text-sm whitespace-nowrap"
               >
                 <Copy className="w-4 h-4" /> Copy Link
               </button>
@@ -1501,9 +1505,14 @@ ${lectureScript.summary}
                         className="w-full bg-natural-bg dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark text-natural-ink dark:text-natural-ink-dark rounded-xl px-4 py-3 focus:border-natural-sage focus:outline-none appearance-none cursor-pointer"
                       >
                         <option value="">Select Week</option>
-                        {["Week 1", "Week 2", "Week 3", "Week 4", "Week 5"].map(w => (
-                          <option key={w} value={w}>{w}</option>
-                        ))}
+                        {Array.from({ length: 52 }, (_, i) => {
+                          const wNum = i + 1;
+                          return (
+                            <option key={wNum} value={`Week ${wNum}`}>
+                              Week {wNum}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                     <div className="space-y-2 md:col-span-2">
@@ -1574,7 +1583,7 @@ ${lectureScript.summary}
                   </div>
                   <button 
                     onClick={() => setShowAddSourceModal(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-natural-sage text-white rounded-full font-bold text-xs hover:shadow-md transition-all shadow-sm"
+                    className="flex items-center gap-2 px-4 py-2 bg-natural-sage text-white dark:text-natural-bg-dark rounded-full font-bold text-xs hover:shadow-md transition-all shadow-sm"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add Source
                   </button>
@@ -1676,7 +1685,7 @@ ${lectureScript.summary}
                           <div className="flex gap-4 mt-2">
                              <button 
                               onClick={handleGenerate}
-                              className="px-10 py-3 bg-natural-sage text-white rounded-full font-bold shadow-natural hover:shadow-lg transition-all text-sm flex items-center gap-2"
+                              className="px-10 py-3 bg-natural-sage text-white dark:text-natural-bg-dark rounded-full font-bold shadow-natural hover:shadow-lg transition-all text-sm flex items-center gap-2"
                             >
                               <Sparkles className="w-5 h-5" /> Generate from Sources
                             </button>
@@ -1691,7 +1700,7 @@ ${lectureScript.summary}
                     ) : sources.length > 0 && (
                       <button 
                         onClick={analyzeSources}
-                        className="px-12 py-4 bg-natural-sage text-white rounded-full font-bold shadow-natural hover:shadow-lg transition-all text-base flex items-center gap-2"
+                        className="px-12 py-4 bg-natural-sage text-white dark:text-natural-bg-dark rounded-full font-bold shadow-natural hover:shadow-lg transition-all text-base flex items-center gap-2"
                       >
                         <Sparkles className="w-5 h-5" /> Synchronize {sources.filter(s => s.selected).length} Sources
                       </button>
@@ -1788,7 +1797,7 @@ ${lectureScript.summary}
                                     className="w-full bg-natural-bg dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark rounded-2xl px-6 py-4 focus:border-natural-sage focus:outline-none pr-32 text-natural-ink dark:text-natural-ink-dark"
                                     onKeyDown={(e) => e.key === 'Enter' && handleAddLink((e.target as HTMLInputElement).value)}
                                   />
-                                  <button onClick={(e) => handleAddLink((e.currentTarget.previousSibling as HTMLInputElement).value)} className="absolute right-3 top-1/2 -translate-y-1/2 px-6 py-2 bg-natural-sage text-white rounded-xl font-bold text-xs shadow-sm hover:shadow-md transition-all">
+                                  <button onClick={(e) => handleAddLink((e.currentTarget.previousSibling as HTMLInputElement).value)} className="absolute right-3 top-1/2 -translate-y-1/2 px-6 py-2 bg-natural-sage text-white dark:text-natural-bg-dark rounded-xl font-bold text-xs shadow-sm hover:shadow-md transition-all">
                                     Import
                                   </button>
                                 </div>
@@ -1826,7 +1835,7 @@ ${lectureScript.summary}
                                 />
                               </div>
                               <div className="flex justify-end">
-                                <button onClick={handleAddPaste} className="px-8 py-3 bg-natural-sage text-white rounded-xl font-bold shadow-sm">
+                                <button onClick={handleAddPaste} className="px-8 py-3 bg-natural-sage text-white dark:text-natural-bg-dark rounded-xl font-bold shadow-sm">
                                   Save Excerpt
                                 </button>
                               </div>
@@ -1845,7 +1854,7 @@ ${lectureScript.summary}
                                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-natural-clay w-5 h-5" />
                                 <button 
                                   onClick={handleSearch} disabled={isSearching}
-                                  className="absolute right-3 top-1/2 -translate-y-1/2 px-6 py-2 bg-natural-ink dark:bg-natural-ink-dark text-white dark:text-natural-ink rounded-xl text-xs font-bold disabled:opacity-50"
+                                  className="absolute right-3 top-1/2 -translate-y-1/2 px-6 py-2 bg-natural-ink dark:bg-natural-ink-dark text-white dark:text-natural-bg-dark rounded-xl text-xs font-bold disabled:opacity-50"
                                 >
                                   {isSearching ? 'Searching...' : 'Search'}
                                 </button>
@@ -1871,7 +1880,7 @@ ${lectureScript.summary}
                                           addSource({ type: 'search', title: result.title, content: `${result.title}\n${result.snippet}\nLink: ${result.link}` });
                                           setShowAddSourceModal(false);
                                         }}
-                                        className="shrink-0 p-2 bg-natural-sage/10 text-natural-sage rounded-xl hover:bg-natural-sage hover:text-white transition-all"
+                                        className="shrink-0 p-2 bg-natural-sage/10 text-natural-sage rounded-xl hover:bg-natural-sage hover:text-white dark:hover:text-natural-bg-dark transition-all"
                                       >
                                         <Plus className="w-5 h-5" />
                                       </button>
@@ -1925,13 +1934,13 @@ ${lectureScript.summary}
                 className={`w-full py-4 rounded-[40px] font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-4 active:scale-[0.98] ${
                   success 
                     ? "bg-natural-sage text-white hover:shadow-xl hover:-translate-y-0.5" 
-                    : "bg-natural-ink dark:bg-natural-ink-dark text-white dark:text-natural-ink rounded-[40px] hover:shadow-xl hover:-translate-y-0.5"
+                    : "bg-natural-ink dark:bg-natural-ink-dark text-white dark:text-natural-bg-dark rounded-[40px] hover:shadow-xl hover:-translate-y-0.5"
                 } ${loading ? "opacity-70 cursor-not-allowed" : ""}`}
               >
                 {loading ? (
                   <Loader2 className="w-6 h-6 animate-spin" />
                 ) : (
-                  <Sparkles className={`w-6 h-6 ${success ? "text-white" : "text-natural-sand"}`} />
+                  <Sparkles className={`w-6 h-6 ${success ? "text-white" : "text-natural-sand dark:text-natural-bg-dark"}`} />
                 )}
                 {loading ? "Creating..." : success ? "Generate Plan Now" : "Generate Plan"}
               </button>
@@ -2128,7 +2137,7 @@ ${lectureScript.summary}
                   <table className="w-full text-left border-collapse">
                     <tbody>
                       <tr style={{ height: rowHeights[0] || 'auto' }} className="relative group">
-                        <th className="bg-[#f3f4f6] px-2 py-1 border-b border-r border-black font-bold w-48">Week(as mentioned in SoS)</th>
+                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-2 py-1 border-b border-r border-black font-bold w-48">Week(as mentioned in SoS)</th>
                         <td 
                           className={`px-2 py-1 border-b border-r border-black outline-none hover:bg-yellow-50/10 ${activeCell?.section === 'info' && activeCell.row === 0 && activeCell.col === 0 ? 'lp-cell-active' : ''}`}
                         >
@@ -2142,7 +2151,7 @@ ${lectureScript.summary}
                             {form.week}
                           </div>
                         </td>
-                        <th className="bg-[#f3f4f6] px-2 py-1 border-b border-r border-black font-bold w-20">Dates</th>
+                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-2 py-1 border-b border-r border-black font-bold w-20">Dates</th>
                         <td 
                           className={`px-2 py-1 border-b border-black outline-none hover:bg-yellow-50/10 relative ${activeCell?.section === 'info' && activeCell.row === 0 && activeCell.col === 1 ? 'lp-cell-active' : ''}`}
                         >
@@ -2158,7 +2167,7 @@ ${lectureScript.summary}
                         </td>
                       </tr>
                       <tr style={{ height: rowHeights[1] || 'auto' }} className="relative group">
-                        <th className="bg-[#f3f4f6] px-2 py-1 border-b border-r border-black font-bold">Class</th>
+                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-2 py-1 border-b border-r border-black font-bold">Class</th>
                         <td 
                           className={`px-2 py-1 border-b border-r border-black outline-none hover:bg-yellow-50/10 ${activeCell?.section === 'info' && activeCell.row === 1 && activeCell.col === 0 ? 'lp-cell-active' : ''}`}
                         >
@@ -2172,7 +2181,7 @@ ${lectureScript.summary}
                             {form.className}
                           </div>
                         </td>
-                        <th className="bg-[#f3f4f6] px-2 py-1 border-b border-r border-black font-bold w-20">Subject</th>
+                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-2 py-1 border-b border-r border-black font-bold w-20">Subject</th>
                         <td 
                           className={`px-2 py-1 border-b border-r border-black outline-none hover:bg-yellow-50/10 ${activeCell?.section === 'info' && activeCell.row === 1 && activeCell.col === 1 ? 'lp-cell-active' : ''}`}
                         >
@@ -2186,7 +2195,7 @@ ${lectureScript.summary}
                             {form.subject}
                           </div>
                         </td>
-                        <th className="bg-[#f3f4f6] px-2 py-1 border-b border-r border-black font-bold w-24">No. of pds</th>
+                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-2 py-1 border-b border-r border-black font-bold w-24">No. of pds</th>
                         <td 
                           className={`px-2 py-1 border-b border-black outline-none hover:bg-yellow-50/10 relative ${activeCell?.section === 'info' && activeCell.row === 1 && activeCell.col === 2 ? 'lp-cell-active' : ''}`}
                         >
@@ -2203,7 +2212,7 @@ ${lectureScript.summary}
                         </td>
                       </tr>
                       <tr>
-                        <th className="bg-[#f3f4f6] px-2 py-1 border-b border-r border-black font-bold">Chapter</th>
+                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-2 py-1 border-b border-r border-black font-bold">Chapter</th>
                         <td colSpan={2} className={`px-2 py-1 border-b border-r border-black outline-none ${isEditing ? 'bg-yellow-50/30' : ''}`}>
                           <div 
                             contentEditable={isEditing} 
@@ -2214,7 +2223,7 @@ ${lectureScript.summary}
                             {form.chapter}
                           </div>
                         </td>
-                        <th className="bg-[#f3f4f6] px-2 py-1 border-b border-r border-black font-bold underline">Textbook page nos.</th>
+                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-2 py-1 border-b border-r border-black font-bold underline">Textbook page nos.</th>
                         <td className={`px-2 py-1 border-b border-black outline-none ${isEditing ? 'bg-yellow-50/30' : ''}`}>
                           <div 
                             contentEditable={isEditing} 
@@ -2227,7 +2236,7 @@ ${lectureScript.summary}
                         </td>
                       </tr>
                       <tr>
-                        <th className="bg-[#f3f4f6] px-2 py-1 border-b border-r border-black font-bold">Topics</th>
+                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-2 py-1 border-b border-r border-black font-bold">Topics</th>
                         <td colSpan={5} className={`px-2 py-1 border-b border-black outline-none ${isEditing ? 'bg-yellow-50/30' : ''}`}>
                           <div 
                             contentEditable={isEditing} 
@@ -2240,7 +2249,7 @@ ${lectureScript.summary}
                         </td>
                       </tr>
                       <tr className="border-b border-black">
-                        <th className="bg-[#f3f4f6] px-2 py-1 border-r border-black font-bold">Teaching Aids</th>
+                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-2 py-1 border-r border-black font-bold">Teaching Aids</th>
                         <td colSpan={5} className={`px-2 py-1 outline-none ${isEditing ? 'bg-yellow-50/30' : ''}`}>
                           <div 
                             contentEditable={isEditing} 
@@ -2265,7 +2274,7 @@ ${lectureScript.summary}
                         <col key={i} style={{ width: `${w}%` }} />
                       ))}
                     </colgroup>
-                    <thead className="bg-[#f3f4f6]">
+                    <thead className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50">
                       <tr className="relative">
                         {['SLOs', 'Explanation', 'Assessment', 'Classwork/Homework'].map((h, i) => (
                           <th key={i} className="border border-black p-1.5 font-bold underline leading-tight relative group">
@@ -2288,7 +2297,7 @@ ${lectureScript.summary}
                       {plan.periods.map((p, pIdx) => (
                         <React.Fragment key={pIdx}>
                           <tr className="group/phead">
-                            <td colSpan={4} className="bg-[#f9fafb] border border-black px-3 py-1 font-bold italic relative">
+                            <td colSpan={4} className="bg-[#f9fafb] dark:bg-natural-bg-dark/30 border border-black px-3 py-1 font-bold italic relative">
                               <div className="flex items-center justify-between">
                                 <span>Period {pIdx + 1}</span>
                                 {isEditing && (
