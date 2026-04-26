@@ -10,9 +10,11 @@ let aiInstance: GoogleGenAI | null = null;
 
 function getAI() {
   if (!aiInstance) {
-    const apiKey = process.env.GEMINI_API_KEY;
+    // Try process.env (AI Studio) first, then import.meta.env (Vite/Vercel)
+    const apiKey = (typeof process !== "undefined" ? process.env.GEMINI_API_KEY : "") || import.meta.env.VITE_GEMINI_API_KEY;
+    
     if (!apiKey) {
-      throw new Error("AI Configuration Missing: The GEMINI_API_KEY environment variable is not defined. Please check the application settings.");
+      throw new Error("AI Configuration Missing: The GEMINI_API_KEY or VITE_GEMINI_API_KEY environment variable is not defined. Please check your Vercel Environment Variables.");
     }
     aiInstance = new GoogleGenAI({ apiKey });
   }
