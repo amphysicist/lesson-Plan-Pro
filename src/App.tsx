@@ -150,7 +150,7 @@ export default function App() {
   }, []);
 
   // Interactive Table State
-  const [colWidths, setColWidths] = useState([22, 38, 25, 15]);
+  const [colWidths, setColWidths] = useState([20, 30, 25, 25]);
   const [rowHeights, setRowHeights] = useState<number[]>([]);
   const [activeCell, setActiveCell] = useState<{ row: number; col: number; section: 'info' | 'slo' } | null>(null);
   const [cellBorders, setCellBorders] = useState<Record<string, { top?: boolean; bottom?: boolean; left?: boolean; right?: boolean }>>({});
@@ -331,7 +331,12 @@ export default function App() {
       setPlan(slicedPlan);
       setLastGeneratedClass(form.className);
     } catch (err: any) {
-      setError(err.message || "Failed to generate lesson plan. Please try again.");
+      const msg = err.message || String(err);
+      if (msg.includes("API_KEY") || msg.includes("VITE_GEMINI_API_KEY")) {
+        setError("AI Configuration Error: Please verify your Gemini API key (VITE_GEMINI_API_KEY) in your Vercel environment variables.");
+      } else {
+        setError(msg || "Failed to generate lesson plan. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -1342,7 +1347,7 @@ ${lectureScript.summary}
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
+      <main className="max-w-[1240px] mx-auto px-4 sm:px-6 py-6 sm:py-10">
         {shareUrl && (
           <motion.div 
             initial={{ opacity: 0, y: -20 }}
@@ -2225,7 +2230,7 @@ ${lectureScript.summary}
                 {/* SLO Table Header */}
                 <div className="mx-2 mt-2 bg-white text-[10.5pt] relative">
                   <p className="font-bold mb-1">Student Learning Objectives (SLOs) of the week:</p>
-                  <table className="w-full border-collapse border border-black text-center relative" style={{ tableLayout: 'fixed' }}>
+                  <table className="w-full border-collapse border border-black text-center relative">
                     <colgroup>
                       {colWidths.map((w, i) => (
                         <col key={i} style={{ width: `${w}%` }} />
@@ -2286,7 +2291,7 @@ ${lectureScript.summary}
                                 <td 
                                   key={colIdx}
                                   onFocus={() => setActiveCell({ row: pIdx, col: colIdx, section: 'slo' })}
-                                  className={`border border-black p-2 leading-relaxed whitespace-pre-line hover:bg-yellow-50/10 transition-colors relative
+                                  className={`border border-black p-2 leading-relaxed whitespace-pre-line break-words hover:bg-yellow-50/10 transition-colors relative
                                     ${activeCell?.section === 'slo' && activeCell.row === pIdx && activeCell.col === colIdx ? 'lp-cell-active' : ''}
                                     ${isEditing ? 'cursor-text' : ''}
                                   `}
