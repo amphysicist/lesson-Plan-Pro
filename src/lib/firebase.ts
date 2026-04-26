@@ -18,7 +18,7 @@ import firebaseConfigJSON from '../../firebase-applet-config.json';
 
 // Use environment variables if available (prefixed with VITE_ for client-side Vite)
 // otherwise fallback to the JSON config file.
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfigJSON.apiKey,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigJSON.authDomain,
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfigJSON.projectId,

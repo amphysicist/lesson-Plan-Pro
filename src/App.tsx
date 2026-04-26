@@ -72,7 +72,7 @@ import {
   SourceType
 } from "./types";
 import { generateLessonPlan, extractPlanInfo, generateLectureScript, searchResources } from "./lib/gemini";
-import { sharePlan, getSharedPlan, auth, onAuthStateChanged, archivePlan, getArchivedPlans, deleteArchivedPlan, SharedPlan } from "./lib/firebase";
+import { sharePlan, getSharedPlan, auth, onAuthStateChanged, archivePlan, getArchivedPlans, deleteArchivedPlan, SharedPlan, firebaseConfig } from "./lib/firebase";
 import { QRCodeSVG } from 'qrcode.react';
 
 const extractTextFromPDF = async (file: File): Promise<string> => {
@@ -175,9 +175,13 @@ export default function App() {
   useEffect(() => {
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
+      document.body.classList.add('dark');
+      document.documentElement.style.colorScheme = 'dark';
       localStorage.setItem('theme', 'dark');
     } else {
       document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark');
+      document.documentElement.style.colorScheme = 'light';
       localStorage.setItem('theme', 'light');
     }
   }, [isDarkMode]);
@@ -331,12 +335,13 @@ export default function App() {
       setPlan(slicedPlan);
       setLastGeneratedClass(form.className);
     } catch (err: any) {
-      const msg = err.message || String(err);
-      if (msg.includes("API_KEY") || msg.includes("VITE_GEMINI_API_KEY")) {
+      let msg = err.message || String(err);
+      if (msg.includes("auth/unauthorized-domain")) {
+        msg = "Firebase Auth Error: This domain is not authorized. Please add 'lesson-plan-pro.vercel.app' to Authorized Domains in your Firebase Console (Authentication > Settings).";
+      } else if (msg.includes("API_KEY") || msg.includes("VITE_GEMINI_API_KEY")) {
         setError("AI Configuration Error: Please verify your Gemini API key (VITE_GEMINI_API_KEY) in your Vercel environment variables.");
-      } else {
-        setError(msg || "Failed to generate lesson plan. Please try again.");
       }
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -978,7 +983,19 @@ ${lectureScript.summary}
       
       setSuccess("Lesson plan shared! Copy the link below.");
     } catch (err: any) {
-      setError(err.message || "Failed to share plan.");
+      const msg = err.message || String(err);
+      if (msg.includes("auth/unauthorized-domain")) {
+        const currentDomain = window.location.hostname;
+        const projectId = firebaseConfig.projectId;
+        const authDomain = firebaseConfig.authDomain;
+        setError(`Firebase Auth Error: The domain "${currentDomain}" is not authorized. 
+          1. Go to Firebase Console for project: "${projectId}"
+          2. Go to Authentication > Settings > Authorized Domains
+          3. Add "${currentDomain}" to the list.
+          (Technical Note: You are using projectId: "${projectId}" and authDomain: "${authDomain}")`);
+      } else {
+        setError(msg || "Failed to share plan.");
+      }
     } finally {
       setSharing(false);
     }
@@ -995,7 +1012,19 @@ ${lectureScript.summary}
       setArchivedPlans(updated);
       setSuccess("Plan successfully saved to your archives!");
     } catch (err: any) {
-      setError(err.message || "Failed to archive plan.");
+      const msg = err.message || String(err);
+      if (msg.includes("auth/unauthorized-domain")) {
+        const currentDomain = window.location.hostname;
+        const projectId = firebaseConfig.projectId;
+        const authDomain = firebaseConfig.authDomain;
+        setError(`Firebase Auth Error: The domain "${currentDomain}" is not authorized. 
+          1. Go to Firebase Console for project: "${projectId}"
+          2. Go to Authentication > Settings > Authorized Domains
+          3. Add "${currentDomain}" to the list.
+          (Technical Note: You are using projectId: "${projectId}" and authDomain: "${authDomain}")`);
+      } else {
+        setError(msg || "Failed to archive plan.");
+      }
     } finally {
       setArchiving(false);
     }
@@ -1030,8 +1059,8 @@ ${lectureScript.summary}
 
   if (activeView === 'lecture' && lectureScript) {
     return (
-      <div id="lecture-page" className="min-h-screen bg-white font-sans">
-        <nav className="no-print sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-natural-border px-4 sm:px-8 py-4 flex items-center justify-between">
+      <div id="lecture-page" className="min-h-screen bg-natural-bg dark:bg-natural-bg-dark font-sans transition-colors duration-300">
+        <nav className="no-print sticky top-0 z-50 bg-white/80 dark:bg-natural-paper-dark/80 backdrop-blur-md border-b border-natural-border dark:border-natural-border-dark px-4 sm:px-8 py-4 flex items-center justify-between transition-colors duration-300">
           <button 
             onClick={() => setActiveView('builder')}
             className="flex items-center gap-1.5 text-natural-ink-light dark:text-natural-ink-light-dark hover:text-natural-ink dark:hover:text-natural-ink-dark transition-colors font-bold text-xs"
