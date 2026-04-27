@@ -91,7 +91,8 @@ import {
   signOut,
   updateProfile,
   googleProvider,
-  signInWithPopup
+  signInWithPopup,
+  sendPasswordResetEmail
 } from "./lib/firebase";
 import { QRCodeSVG } from 'qrcode.react';
 import ReCAPTCHA from "react-google-recaptcha";
@@ -116,6 +117,7 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
   const [name, setName] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState("");
+  const [resetSent, setResetSent] = useState(false);
   const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
 
   const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
@@ -123,9 +125,28 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
   const handleGoogleLogin = async () => {
     setAuthLoading(true);
     setAuthError("");
+    setResetSent(false);
     try {
       await signInWithPopup(auth, googleProvider);
       onAuthSuccess();
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!email) {
+      setAuthError("Please enter your email address to reset your password.");
+      return;
+    }
+    setAuthLoading(true);
+    setAuthError("");
+    setResetSent(false);
+    try {
+      await sendPasswordResetEmail(auth, email);
+      setResetSent(true);
     } catch (err: any) {
       setAuthError(err.message);
     } finally {
@@ -143,6 +164,7 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
 
     setAuthLoading(true);
     setAuthError("");
+    setResetSent(false);
     try {
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
@@ -220,6 +242,17 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
           </motion.div>
         )}
 
+        {resetSent && (
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-3 p-2 bg-indigo-500/10 backdrop-blur-md border border-indigo-500/30 rounded-lg flex items-start gap-2 text-indigo-200 text-[10px]"
+          >
+            <Sparkles className="w-3 h-3 shrink-0 mt-0.5" />
+            <p className="font-medium">Password reset email sent! Please check your inbox.</p>
+          </motion.div>
+        )}
+
         <form onSubmit={handleEmailAuth} className="space-y-2.5 mb-4">
           {!isLogin && (
             <div className="relative group">
@@ -274,7 +307,8 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
                 <button 
                   type="button" 
                   className="text-[9px] text-indigo-400 font-semibold hover:text-indigo-300 transition-colors ml-auto"
-                  onClick={() => alert("Password reset functionality coming soon!")}
+                  onClick={handleResetPassword}
+                  disabled={authLoading}
                 >
                   Forgot Password?
                 </button>

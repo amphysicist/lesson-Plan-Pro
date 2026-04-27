@@ -21,7 +21,8 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
-  updateProfile
+  updateProfile,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import firebaseConfigJSON from '../../firebase-applet-config.json';
 
@@ -48,7 +49,8 @@ export {
   signInWithEmailAndPassword, 
   signOut,
   updateProfile,
-  signInWithPopup
+  signInWithPopup,
+  sendPasswordResetEmail
 };
 export const googleProvider = new GoogleAuthProvider();
 
