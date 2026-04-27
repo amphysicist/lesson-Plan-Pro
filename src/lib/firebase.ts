@@ -13,7 +13,16 @@ import {
   getDocs,
   deleteDoc
 } from 'firebase/firestore';
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from 'firebase/auth';
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile
+} from 'firebase/auth';
 import firebaseConfigJSON from '../../firebase-applet-config.json';
 
 // Use environment variables if available (prefixed with VITE_ for client-side Vite)
@@ -33,7 +42,14 @@ const app = initializeApp(firebaseConfig);
 // Explicitly use the databaseId from config
 export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
 export const auth = getAuth(app);
-export { onAuthStateChanged };
+export { 
+  onAuthStateChanged, 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signOut,
+  updateProfile,
+  signInWithPopup
+};
 export const googleProvider = new GoogleAuthProvider();
 
 export async function testConnection() {

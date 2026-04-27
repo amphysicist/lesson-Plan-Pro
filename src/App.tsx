@@ -58,6 +58,10 @@ import {
   Database,
   Search,
   Video,
+  Mail,
+  UserPlus,
+  LogIn,
+  LogOut,
   BookOpen as BookOpenIcon,
   AlertCircle as AlertCircleIcon
 } from "lucide-react";
@@ -72,8 +76,25 @@ import {
   SourceType
 } from "./types";
 import { generateLessonPlan, extractPlanInfo, generateLectureScript, searchResources } from "./lib/gemini";
-import { sharePlan, getSharedPlan, auth, onAuthStateChanged, archivePlan, getArchivedPlans, deleteArchivedPlan, SharedPlan, firebaseConfig } from "./lib/firebase";
+import { 
+  sharePlan, 
+  getSharedPlan, 
+  auth, 
+  onAuthStateChanged, 
+  archivePlan, 
+  getArchivedPlans, 
+  deleteArchivedPlan, 
+  SharedPlan, 
+  firebaseConfig,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  updateProfile,
+  googleProvider,
+  signInWithPopup
+} from "./lib/firebase";
 import { QRCodeSVG } from 'qrcode.react';
+import ReCAPTCHA from "react-google-recaptcha";
 
 const extractTextFromPDF = async (file: File): Promise<string> => {
   const arrayBuffer = await file.arrayBuffer();
@@ -86,6 +107,232 @@ const extractTextFromPDF = async (file: File): Promise<string> => {
     fullText += pageText + "\n";
   }
   return fullText;
+};
+
+const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
+  const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [recaptchaToken, setRecaptchaToken] = useState<string | null>(null);
+
+  const recaptchaSiteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
+
+  const handleGoogleLogin = async () => {
+    setAuthLoading(true);
+    setAuthError("");
+    try {
+      await signInWithPopup(auth, googleProvider);
+      onAuthSuccess();
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleEmailAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!recaptchaToken) {
+      // Optional: Allow bypass in dev environment if the user is stuck on domain validation
+      const isDev = window.location.hostname.includes('run.app');
+      if (isDev && !recaptchaSiteKey) {
+        // Continue if no key is provided at all
+      } else if (isDev) {
+        const proceed = confirm("reCAPTCHA verification is missing or failed (likely due to domain mismatch). Since you are in the AI Studio preview, would you like to bypass this check temporarily?");
+        if (!proceed) {
+          setAuthError("Please complete the reCAPTCHA verification.");
+          return;
+        }
+      } else {
+        setAuthError("Please complete the reCAPTCHA verification.");
+        return;
+      }
+    }
+
+    setAuthLoading(true);
+    setAuthError("");
+    try {
+      if (isLogin) {
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        // Enforce Gmail only for sign-ups
+        if (!email.toLowerCase().endsWith("@gmail.com")) {
+          throw new Error("Only Gmail addresses (@gmail.com) are accepted for sign-up.");
+        }
+
+        // Password complexity rules
+        if (password.length < 8) {
+          throw new Error("Password must be at least 8 characters long.");
+        }
+        if (!/[A-Z]/.test(password)) {
+          throw new Error("Password must contain at least one uppercase letter.");
+        }
+        if (!/[a-z]/.test(password)) {
+          throw new Error("Password must contain at least one lowercase letter.");
+        }
+        if (!/[0-9]/.test(password)) {
+          throw new Error("Password must contain at least one number.");
+        }
+
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        if (name) {
+          await updateProfile(userCredential.user, { displayName: name });
+        }
+      }
+      onAuthSuccess();
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-natural-bg/80 dark:bg-natural-bg-dark/80 backdrop-blur-sm p-4">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        className="bg-white dark:bg-natural-paper-dark w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 md:p-10 border border-natural-border dark:border-natural-border-dark overflow-hidden relative"
+      >
+        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-natural-sage via-natural-stone to-natural-sage opacity-20" />
+        
+        <div className="flex flex-col items-center text-center mb-8">
+          <div className="w-16 h-16 bg-natural-sage/10 rounded-2xl flex items-center justify-center mb-4">
+            <Sparkles className="w-8 h-8 text-natural-sage" />
+          </div>
+          <h2 className="text-3xl font-bold text-natural-ink dark:text-natural-ink-dark mb-2">
+            {isLogin ? "Welcome Back" : "Get Started"}
+          </h2>
+          <p className="text-natural-ink-light dark:text-natural-ink-light-dark text-sm max-w-[280px]">
+            {isLogin 
+              ? "Sign in to continue your lesson plan journey" 
+              : "Create an account to start building amazing plans"}
+          </p>
+        </div>
+
+        {authError && (
+          <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-2xl flex items-start gap-3 text-red-600 dark:text-red-400 text-sm">
+            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
+            <p>{authError}</p>
+          </div>
+        )}
+
+        <form onSubmit={handleEmailAuth} className="space-y-4 mb-8">
+          {!isLogin && (
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-natural-ink-light dark:text-natural-ink-light-dark group-focus-within:text-natural-sage transition-colors">
+                <FileText className="w-5 h-5" />
+              </div>
+              <input
+                type="text"
+                placeholder="Your Full Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                className="w-full bg-natural-bg dark:bg-black/20 border border-natural-border dark:border-natural-border-dark rounded-2xl pl-12 pr-4 py-4 focus:border-natural-sage focus:outline-none text-natural-ink dark:text-natural-ink-dark transition-all placeholder:text-natural-ink-light/50"
+                required={!isLogin}
+              />
+            </div>
+          )}
+          
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-natural-ink-light dark:text-natural-ink-light-dark group-focus-within:text-natural-sage transition-colors">
+              <Mail className="w-5 h-5" />
+            </div>
+            <input
+              type="email"
+              placeholder="Email Address"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full bg-natural-bg dark:bg-black/20 border border-natural-border dark:border-natural-border-dark rounded-2xl pl-12 pr-4 py-4 focus:border-natural-sage focus:outline-none text-natural-ink dark:text-natural-ink-dark transition-all placeholder:text-natural-ink-light/50"
+              required
+            />
+          </div>
+
+          <div className="relative group">
+            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-natural-ink-light dark:text-natural-ink-light-dark group-focus-within:text-natural-sage transition-colors">
+              <Lock className="w-5 h-5" />
+            </div>
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-natural-bg dark:bg-black/20 border border-natural-border dark:border-natural-border-dark rounded-2xl pl-12 pr-4 py-4 focus:border-natural-sage focus:outline-none text-natural-ink dark:text-natural-ink-dark transition-all placeholder:text-natural-ink-light/50"
+              required
+            />
+            {!isLogin && (
+              <p className="mt-2 text-[10px] text-natural-ink-light/70 dark:text-natural-ink-light-dark/50 px-2 leading-relaxed">
+                Password must be 8+ characters with uppercase, lowercase, and a number.
+              </p>
+            )}
+          </div>
+
+          <div className="flex justify-center mb-4 min-h-[78px]">
+            {recaptchaSiteKey ? (
+              <ReCAPTCHA
+                sitekey={recaptchaSiteKey}
+                onChange={(token) => setRecaptchaToken(token)}
+                theme="light"
+              />
+            ) : (
+              <div className="text-[10px] text-red-500 italic text-center">
+                reCAPTCHA Site Key not configured. Please add VITE_RECAPTCHA_SITE_KEY to environment variables.
+              </div>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={authLoading}
+            className="w-full bg-natural-sage text-white dark:text-natural-bg-dark font-bold py-4 rounded-2xl shadow-lg hover:shadow-xl hover:translate-y-[-2px] active:translate-y-[0] transition-all disabled:opacity-50 disabled:translate-y-0 flex items-center justify-center gap-2 group"
+          >
+            {authLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <>
+                {isLogin ? <LogIn className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
+                {isLogin ? "Sign In" : "Create Account"}
+                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </>
+            )}
+          </button>
+        </form>
+
+        <div className="relative mb-6">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-natural-border dark:border-natural-border-dark"></div>
+          </div>
+          <div className="relative flex justify-center text-xs uppercase">
+            <span className="bg-white dark:bg-natural-paper-dark px-2 text-natural-ink-light dark:text-natural-ink-light-dark">Or continue with</span>
+          </div>
+        </div>
+
+        <button
+          onClick={handleGoogleLogin}
+          type="button"
+          disabled={authLoading}
+          className="w-full bg-white dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark text-natural-ink dark:text-natural-ink-dark font-bold py-4 rounded-2xl shadow-sm hover:shadow-md hover:bg-natural-bg dark:hover:bg-natural-bg-dark/80 transition-all flex items-center justify-center gap-3"
+        >
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
+          Google Account
+        </button>
+
+        <p className="mt-8 text-center text-sm text-natural-ink-light dark:text-natural-ink-light-dark">
+          {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
+          <button
+            onClick={() => setIsLogin(!isLogin)}
+            className="text-natural-sage font-bold hover:underline underline-offset-4"
+          >
+            {isLogin ? "Sign Up Free" : "Login Now"}
+          </button>
+        </p>
+      </motion.div>
+    </div>
+  );
 };
 
 const extractTextFromDocx = async (file: File): Promise<string> => {
@@ -1226,6 +1473,10 @@ ${lectureScript.summary}
     );
   }
 
+  if (!user) {
+    return <Auth onAuthSuccess={() => {}} />;
+  }
+
   return (
     <div className="min-h-screen bg-natural-bg dark:bg-natural-bg-dark transition-colors duration-300">
       {/* Header */}
@@ -1241,6 +1492,25 @@ ${lectureScript.summary}
         </div>
         
         <div className="flex flex-wrap items-center justify-center md:justify-end gap-2 sm:gap-4 w-full md:w-auto">
+          {/* User Profile & Sign Out */}
+          <div className="flex items-center gap-3 mr-2 pr-4 border-r border-natural-border dark:border-natural-border-dark">
+            <div className="hidden sm:flex flex-col items-end">
+              <span className="text-xs font-bold text-natural-ink dark:text-natural-ink-dark">
+                {user?.displayName || (user?.email ? user.email.split('@')[0] : 'User')}
+              </span>
+              <span className="text-[10px] text-natural-ink-light dark:text-natural-ink-light-dark">
+                {user?.email}
+              </span>
+            </div>
+            <button 
+              onClick={() => signOut(auth)}
+              className="p-2 bg-white dark:bg-natural-paper-dark border border-natural-border dark:border-natural-border-dark text-natural-ink-light hover:text-red-500 rounded-lg shadow-sm transition-all group"
+              title="Sign Out"
+            >
+              <LogOut className="w-4 h-4 group-hover:scale-110 transition-transform" />
+            </button>
+          </div>
+
           <button 
             onClick={() => setIsDarkMode(!isDarkMode)}
             className="p-2.5 bg-natural-paper dark:bg-natural-paper-dark border border-natural-border dark:border-natural-border-dark rounded-full text-natural-clay shadow-sm hover:shadow-md transition-all"
@@ -1929,7 +2199,6 @@ ${lectureScript.summary}
 
               <button 
                 onClick={handleGenerate}
-                loading={loading}
                 disabled={loading}
                 className={`w-full py-4 rounded-[40px] font-bold text-lg shadow-lg transition-all flex items-center justify-center gap-4 active:scale-[0.98] ${
                   success 
