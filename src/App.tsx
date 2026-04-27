@@ -136,21 +136,9 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!recaptchaToken) {
-      // Optional: Allow bypass in dev environment if the user is stuck on domain validation
-      const isDev = window.location.hostname.includes('run.app');
-      if (isDev && !recaptchaSiteKey) {
-        // Continue if no key is provided at all
-      } else if (isDev) {
-        const proceed = confirm("reCAPTCHA verification is missing or failed (likely due to domain mismatch). Since you are in the AI Studio preview, would you like to bypass this check temporarily?");
-        if (!proceed) {
-          setAuthError("Please complete the reCAPTCHA verification.");
-          return;
-        }
-      } else {
-        setAuthError("Please complete the reCAPTCHA verification.");
-        return;
-      }
+    if (recaptchaSiteKey && !recaptchaToken) {
+      setAuthError("Please complete the reCAPTCHA verification.");
+      return;
     }
 
     setAuthLoading(true);
@@ -192,95 +180,120 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-natural-bg/80 dark:bg-natural-bg-dark/80 backdrop-blur-sm p-4">
+    <div className="min-h-screen w-full flex items-center justify-center bg-[#0a0510] relative overflow-hidden p-4 sm:p-6">
+      {/* Dynamic Background Elements */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-600/20 blur-[120px] animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-purple-600/20 blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(120,80,255,0.05)_0%,transparent_70%)]" />
+      </div>
+
       <motion.div 
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="bg-white dark:bg-natural-paper-dark w-full max-w-md rounded-[2.5rem] shadow-2xl p-8 md:p-10 border border-natural-border dark:border-natural-border-dark overflow-hidden relative"
+        transition={{ duration: 0.5, ease: "easeOut" }}
+        className="bg-white/10 backdrop-blur-2xl w-full max-w-sm rounded-[2rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] p-5 md:p-6 border border-white/20 relative z-10 overflow-visible mx-auto my-2"
       >
-        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-natural-sage via-natural-stone to-natural-sage opacity-20" />
-        
-        <div className="flex flex-col items-center text-center mb-8">
-          <div className="w-16 h-16 bg-natural-sage/10 rounded-2xl flex items-center justify-center mb-4">
-            <Sparkles className="w-8 h-8 text-natural-sage" />
+        <div className="flex flex-col items-center text-center">
+          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center mb-3 shadow-lg shadow-indigo-500/20 rotate-3 hover:rotate-0 transition-transform duration-300">
+            <Sparkles className="w-5 h-5 text-white" />
           </div>
-          <h2 className="text-3xl font-bold text-natural-ink dark:text-natural-ink-dark mb-2">
+          
+          <h2 className="text-xl font-extrabold text-white mb-1 tracking-tight">
             {isLogin ? "Welcome Back" : "Get Started"}
           </h2>
-          <p className="text-natural-ink-light dark:text-natural-ink-light-dark text-sm max-w-[280px]">
+          <p className="text-white/60 text-[10px] font-medium mb-4 max-w-[240px] leading-relaxed">
             {isLogin 
-              ? "Sign in to continue your lesson plan journey" 
-              : "Create an account to start building amazing plans"}
+              ? "Your lesson-planning superpowers await." 
+              : "Empower your teaching with AI-crafted plans."}
           </p>
         </div>
 
         {authError && (
-          <div className="mb-6 p-4 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-2xl flex items-start gap-3 text-red-600 dark:text-red-400 text-sm">
-            <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" />
-            <p>{authError}</p>
-          </div>
+          <motion.div 
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-3 p-2 bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-lg flex items-start gap-2 text-red-200 text-[10px]"
+          >
+            <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
+            <p className="font-medium">{authError}</p>
+          </motion.div>
         )}
 
-        <form onSubmit={handleEmailAuth} className="space-y-4 mb-8">
+        <form onSubmit={handleEmailAuth} className="space-y-2.5 mb-4">
           {!isLogin && (
             <div className="relative group">
-              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-natural-ink-light dark:text-natural-ink-light-dark group-focus-within:text-natural-sage transition-colors">
-                <FileText className="w-5 h-5" />
+              <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none text-white/40 group-focus-within:text-indigo-400 transition-colors">
+                <FileText className="w-3.5 h-3.5" />
               </div>
               <input
                 type="text"
                 placeholder="Your Full Name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-natural-bg dark:bg-black/20 border border-natural-border dark:border-natural-border-dark rounded-2xl pl-12 pr-4 py-4 focus:border-natural-sage focus:outline-none text-natural-ink dark:text-natural-ink-dark transition-all placeholder:text-natural-ink-light/50"
+                className="w-full bg-white/5 border border-white/10 rounded-lg pl-10 pr-3 py-2.5 focus:border-indigo-500/50 focus:bg-white/10 focus:outline-none text-white transition-all placeholder:text-white/30 text-[11px]"
                 required={!isLogin}
               />
             </div>
           )}
           
           <div className="relative group">
-            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-natural-ink-light dark:text-natural-ink-light-dark group-focus-within:text-natural-sage transition-colors">
-              <Mail className="w-5 h-5" />
+            <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none text-white/40 group-focus-within:text-indigo-400 transition-colors">
+              <Mail className="w-3.5 h-3.5" />
             </div>
             <input
               type="email"
               placeholder="Email Address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-natural-bg dark:bg-black/20 border border-natural-border dark:border-natural-border-dark rounded-2xl pl-12 pr-4 py-4 focus:border-natural-sage focus:outline-none text-natural-ink dark:text-natural-ink-dark transition-all placeholder:text-natural-ink-light/50"
+              className="w-full bg-white/5 border border-white/10 rounded-lg pl-10 pr-3 py-2.5 focus:border-indigo-500/50 focus:bg-white/10 focus:outline-none text-white transition-all placeholder:text-white/30 text-[11px]"
               required
             />
           </div>
 
-          <div className="relative group">
-            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-natural-ink-light dark:text-natural-ink-light-dark group-focus-within:text-natural-sage transition-colors">
-              <Lock className="w-5 h-5" />
-            </div>
-            <input
-              type="password"
-              placeholder="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full bg-natural-bg dark:bg-black/20 border border-natural-border dark:border-natural-border-dark rounded-2xl pl-12 pr-4 py-4 focus:border-natural-sage focus:outline-none text-natural-ink dark:text-natural-ink-dark transition-all placeholder:text-natural-ink-light/50"
-              required
-            />
-            {!isLogin && (
-              <p className="mt-2 text-[10px] text-natural-ink-light/70 dark:text-natural-ink-light-dark/50 px-2 leading-relaxed">
-                Password must be 8+ characters with uppercase, lowercase, and a number.
-              </p>
-            )}
-          </div>
-
-          <div className="flex justify-center mb-4 min-h-[78px]">
-            {recaptchaSiteKey ? (
-              <ReCAPTCHA
-                sitekey={recaptchaSiteKey}
-                onChange={(token) => setRecaptchaToken(token)}
-                theme="light"
+          <div className="space-y-1">
+            <div className="relative group">
+              <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none text-white/40 group-focus-within:text-indigo-400 transition-colors">
+                <Lock className="w-3.5 h-3.5" />
+              </div>
+              <input
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full bg-white/5 border border-white/10 rounded-lg pl-10 pr-3 py-2.5 focus:border-indigo-500/50 focus:bg-white/10 focus:outline-none text-white transition-all placeholder:text-white/30 text-[11px]"
+                required
               />
+            </div>
+            <div className="flex justify-between items-center px-1">
+              {!isLogin ? (
+                <p className="text-[8px] text-white/40 leading-relaxed font-medium">
+                  8+ chars with A-z, 0-9.
+                </p>
+              ) : (
+                <button 
+                  type="button" 
+                  className="text-[9px] text-indigo-400 font-semibold hover:text-indigo-300 transition-colors ml-auto"
+                  onClick={() => alert("Password reset functionality coming soon!")}
+                >
+                  Forgot Password?
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-center py-0.5 min-h-[60px]">
+            {recaptchaSiteKey ? (
+              <div className="scale-[0.65] origin-center">
+                <ReCAPTCHA
+                  sitekey={recaptchaSiteKey}
+                  onChange={(token) => setRecaptchaToken(token)}
+                  theme="dark"
+                />
+              </div>
             ) : (
-              <div className="text-[10px] text-red-500 italic text-center">
-                reCAPTCHA Site Key not configured. Please add VITE_RECAPTCHA_SITE_KEY to environment variables.
+              <div className="text-[8px] text-indigo-300 italic text-center max-w-[180px]">
+                reCAPTCHA Site Key not configured.
               </div>
             )}
           </div>
@@ -288,26 +301,26 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
           <button
             type="submit"
             disabled={authLoading}
-            className="w-full bg-natural-sage text-white dark:text-natural-bg-dark font-bold py-4 rounded-2xl shadow-lg hover:shadow-xl hover:translate-y-[-2px] active:translate-y-[0] transition-all disabled:opacity-50 disabled:translate-y-0 flex items-center justify-center gap-2 group"
+            className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-3 rounded-lg shadow-xl shadow-indigo-600/20 hover:shadow-indigo-600/40 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2 group"
           >
             {authLoading ? (
-              <Loader2 className="w-5 h-5 animate-spin" />
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
               <>
-                {isLogin ? <LogIn className="w-5 h-5" /> : <UserPlus className="w-5 h-5" />}
-                {isLogin ? "Sign In" : "Create Account"}
-                <ChevronRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                {isLogin ? <LogIn className="w-3 h-3" /> : <UserPlus className="w-3 h-3" />}
+                <span className="text-xs">{isLogin ? "Sign In" : "Create Account"}</span>
+                <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
               </>
             )}
           </button>
         </form>
 
-        <div className="relative mb-6">
+        <div className="relative mb-3">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-natural-border dark:border-natural-border-dark"></div>
+            <div className="w-full border-t border-white/10"></div>
           </div>
-          <div className="relative flex justify-center text-xs uppercase">
-            <span className="bg-white dark:bg-natural-paper-dark px-2 text-natural-ink-light dark:text-natural-ink-light-dark">Or continue with</span>
+          <div className="relative flex justify-center text-[8px] uppercase font-bold tracking-[0.2em]">
+            <span className="bg-[#0a0510]/30 px-2 text-white/30 backdrop-blur-xl">Or continue with</span>
           </div>
         </div>
 
@@ -315,17 +328,17 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
           onClick={handleGoogleLogin}
           type="button"
           disabled={authLoading}
-          className="w-full bg-white dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark text-natural-ink dark:text-natural-ink-dark font-bold py-4 rounded-2xl shadow-sm hover:shadow-md hover:bg-natural-bg dark:hover:bg-natural-bg-dark/80 transition-all flex items-center justify-center gap-3"
+          className="w-full bg-white text-gray-900 font-bold py-2.5 rounded-lg shadow-sm hover:shadow-xl hover:bg-gray-50 transition-all flex items-center justify-center gap-2 mb-3"
         >
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-5 h-5" alt="Google" />
-          Google Account
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-3.5 h-3.5" alt="Google" />
+          <span className="text-[11px]">Google Account</span>
         </button>
 
-        <p className="mt-8 text-center text-sm text-natural-ink-light dark:text-natural-ink-light-dark">
-          {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
+        <p className="text-center text-[10px] text-white/50 font-medium tracking-wide">
+          {isLogin ? "New to Lesson Plan Pro?" : "Already a member?"}{" "}
           <button
             onClick={() => setIsLogin(!isLogin)}
-            className="text-natural-sage font-bold hover:underline underline-offset-4"
+            className="text-white font-bold hover:text-indigo-400 transition-colors ml-1 decoration-indigo-400/30 underline underline-offset-2"
           >
             {isLogin ? "Sign Up Free" : "Login Now"}
           </button>
