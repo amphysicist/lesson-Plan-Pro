@@ -234,32 +234,38 @@ export async function generateLectureScript(
 
 export async function searchResources(query: string, userApiKey?: string, backupKeys: string[] = []): Promise<{ title: string; snippet: string; link: string }[]> {
   return withRetry(async (ai) => {
+    const prompt = `Search for educational resources, lesson materials, and textbook-style content related to: ${query}. 
+    Return a list of 5-8 relevant sources.
+    
+    Output the list EXACTLY as a JSON array of objects. 
+    Each object must have these exactly: "title", "snippet", and "link".
+    DO NOT include any text before or after the JSON.
+    DO NOT wrap the JSON in markdown code blocks.`;
+
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [{ role: "user", parts: [{ text: `Search for educational resources, lesson materials, and textbook-style content related to: ${query}. Return a list of relevant sources with titles, brief summaries, and links.` }] }],
+      model: "gemini-3-flash-preview", 
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              title: { type: Type.STRING },
-              snippet: { type: Type.STRING },
-              link: { type: Type.STRING }
-            },
-            required: ["title", "snippet", "link"]
-          }
-        }
       }
     });
 
     const text = response.text;
     if (!text) return [];
     try {
-      return JSON.parse(text.trim());
+      // Find JSON block in case it was wrapped or included extra text
+      const trimmed = text.trim();
+      const firstBracket = trimmed.indexOf("[");
+      const lastBracket = trimmed.lastIndexOf("]");
+      
+      if (firstBracket === -1 || lastBracket === -1) {
+        throw new Error("No JSON array found in response");
+      }
+      
+      const jsonStr = trimmed.substring(firstBracket, lastBracket + 1);
+      return JSON.parse(jsonStr);
     } catch (e) {
+      console.error("Failed to parse search results:", text, e);
       return [];
     }
   }, userApiKey, backupKeys);
