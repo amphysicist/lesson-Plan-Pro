@@ -32,12 +32,12 @@ import { UserConfig } from '../types';
 export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfigJSON.apiKey,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigJSON.authDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfigJSON.projectId,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'ai-studio-applet-webapp-75c21',
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfigJSON.storageBucket,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigJSON.messagingSenderId,
   appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseConfigJSON.appId,
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || firebaseConfigJSON.measurementId,
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || `https://${import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfigJSON.projectId}-default-rtdb.firebaseio.com/`,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || `https://ai-studio-applet-webapp-75c21-default-rtdb.asia-southeast1.firebasedatabase.app`,
 };
 
 const app = initializeApp(firebaseConfig);
@@ -231,19 +231,29 @@ export async function saveUserConfig(uid: string, config: Partial<UserConfig>) {
 export async function getAllUserConfigs(): Promise<{ uid: string; config: UserConfig }[]> {
   try {
     const configRef = ref(db, 'user_configs');
-    // RTDB orderByChild('email') works if the data has an email field.
-    const q = query(configRef, orderByChild('email'));
-    const snapshot = await get(q);
+    let snapshot;
+    try {
+      // Try ordered query first
+      const q = query(configRef, orderByChild('email'));
+      snapshot = await get(q);
+    } catch (queryErr) {
+      console.warn("Ordered query failed, falling back to plain get:", queryErr);
+      snapshot = await get(configRef);
+    }
     
     if (snapshot.exists()) {
-      const data = snapshot.val();
-      return Object.keys(data).map(uid => ({
-        uid,
-        config: data[uid] as UserConfig
-      }));
+      const results: { uid: string; config: UserConfig }[] = [];
+      snapshot.forEach((child) => {
+        results.push({
+          uid: child.key!,
+          config: child.val() as UserConfig
+        });
+      });
+      return results;
     }
     return [];
   } catch (err: any) {
+    console.error("Admin fetch error:", err);
     return handleFirebaseError(err, 'list', 'user_configs');
   }
 }

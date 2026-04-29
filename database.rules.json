@@ -1,36 +1,27 @@
 {
   "rules": {
     "user_configs": {
+      // Allows the Admin to list all user configurations
+      ".read": "auth != null && (auth.token.email === 'amphysicist.bl@gmail.com' || root.child('user_configs').child(auth.uid).child('isAdmin').val() === true)",
       "$uid": {
-        // Users can read/write their own config. Admins can read/write any config.
-        ".read": "auth != null && (auth.uid === $uid || root.child('user_configs').child(auth.uid).child('isAdmin').val() === true)",
-        ".write": "auth != null && (auth.uid === $uid || root.child('user_configs').child(auth.uid).child('isAdmin').val() === true)",
-        // Validate user_configs data structure
-        ".validate": "newData.hasChildren(['email', 'isAdmin'])",
-        "email": { ".validate": "newData.isString()" },
-        "isAdmin": { ".validate": "newData.isBoolean()" },
-        "geminiApiKey": { ".validate": "!newData.exists() || newData.isString()" }
+        // Users can read their own config. Owners or Admins can write.
+        ".read": "auth != null && (auth.uid === $uid || auth.token.email === 'amphysicist.bl@gmail.com' || root.child('user_configs').child(auth.uid).child('isAdmin').val() === true)",
+        ".write": "auth != null && (auth.uid === $uid || auth.token.email === 'amphysicist.bl@gmail.com' || root.child('user_configs').child(auth.uid).child('isAdmin').val() === true)"
       },
-      // Admins can list all configs
-      ".read": "auth != null && root.child('user_configs').child(auth.uid).child('isAdmin').val() === true",
       ".indexOn": ["email"]
     },
     "lessonPlans": {
-      // Shared plans are public read
       ".read": "true",
       "$planId": {
-        // Only authenticated users can share/create plans
         ".write": "auth != null"
       }
     },
     "archivedPlans": {
-      // Users can see their own archives. We use indexOn authorId for this.
       ".read": "auth != null",
-      ".indexOn": ["authorId"],
       "$planId": {
-        // Can only write if you're the author (for create or delete)
-        ".write": "auth != null && (!data.exists() || data.child('authorId').val() === auth.uid) && (!newData.exists() || newData.child('authorId').val() === auth.uid)"
-      }
+        ".write": "auth != null && (!data.exists() || data.child('authorId').val() === auth.uid)"
+      },
+      ".indexOn": ["authorId"]
     }
   }
 }

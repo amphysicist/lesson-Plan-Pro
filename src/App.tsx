@@ -434,6 +434,7 @@ export default function App() {
   const [userConfig, setUserConfig] = useState<UserConfig | null>(null);
   const [allUserConfigs, setAllUserConfigs] = useState<{ uid: string; config: UserConfig }[] | null>(null);
   const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState<string | null>(null);
 
   // Initialize PDF.js worker safely
   useEffect(() => {
@@ -564,17 +565,33 @@ export default function App() {
         
         // Subscribe to user config
         unsubscribeUserConfig = subscribeToUserConfig(u.uid, (config) => {
+          const isPrimaryAdmin = u.email === 'amphysicist.bl@gmail.com';
+          console.log("User Config Update:", config, "Is Primary Admin:", isPrimaryAdmin);
           if (config) {
-            setUserConfig(config);
+            // Force isAdmin true locally for primary admin for immediate UI access
+            const activeConfig = isPrimaryAdmin ? { ...config, isAdmin: true } : config;
+            
+            // If primary admin but isAdmin is false in DB, update it
+            if (isPrimaryAdmin && !config.isAdmin) {
+              saveUserConfig(u.uid, { ...config, isAdmin: true });
+            }
+            setUserConfig(activeConfig);
+
+            // AUTO-REDIRECT: If no API key and we are not already in settings/admin, redirect to settings
+            if (!activeConfig.geminiApiKey && currentSubView === 'editor') {
+              setCurrentSubView('settings');
+            }
           } else {
             // New user, create config
-            const isInitialAdmin = u.email === 'amphysicist.bl@gmail.com';
             const newConfig: UserConfig = {
               email: u.email || '',
-              isAdmin: isInitialAdmin,
+              isAdmin: isPrimaryAdmin,
               geminiApiKey: ''
             };
             saveUserConfig(u.uid, newConfig);
+            setUserConfig(newConfig);
+            // Redirect new users to settings immediately
+            setCurrentSubView('settings');
           }
         });
       } else {
@@ -592,11 +609,18 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    if (userConfig?.isAdmin && currentSubView === 'admin' && !allUserConfigs) {
+    if (userConfig?.isAdmin && currentSubView === 'admin' && !allUserConfigs && !adminError) {
       setAdminLoading(true);
-      getAllUserConfigs().then(setAllUserConfigs).finally(() => setAdminLoading(false));
+      setAdminError(null);
+      getAllUserConfigs()
+        .then(setAllUserConfigs)
+        .catch((err) => {
+          console.error("Admin Dashboard Fetch failed:", err);
+          setAdminError("Failed to fetch user configurations. Please verify permissions.");
+        })
+        .finally(() => setAdminLoading(false));
     }
-  }, [userConfig?.isAdmin, currentSubView, allUserConfigs]);
+  }, [userConfig?.isAdmin, currentSubView, allUserConfigs, adminError]);
 
   useEffect(() => {
     // Prevent saving if both are essentially empty (initial state)
@@ -1843,9 +1867,14 @@ ${lectureScript.summary}
         )}
         <AnimatePresence mode="wait">
           {currentSubView === 'settings' && userConfig ? (
-            <SettingsView key="settings" userConfig={userConfig} setUserConfig={setUserConfig} />
+            <SettingsView 
+              key="settings" 
+              userConfig={userConfig} 
+              setUserConfig={setUserConfig} 
+              onSuccess={() => setCurrentSubView('editor')} 
+            />
           ) : currentSubView === 'admin' && userConfig?.isAdmin ? (
-            <AdminDashboard key="admin" allConfigs={allUserConfigs} loading={adminLoading} />
+            <AdminDashboard key="admin" allConfigs={allUserConfigs} loading={adminLoading} error={adminError} />
           ) : loading ? (
             <motion.div
               key="loading"
@@ -2910,7 +2939,7 @@ ${lectureScript.summary}
 }
 
 // Sub-components for Settings and Admin
-const SettingsView = ({ userConfig, setUserConfig }: { userConfig: UserConfig, setUserConfig: (c: UserConfig) => void }) => {
+const SettingsView = ({ userConfig, setUserConfig, onSuccess }: { userConfig: UserConfig, setUserConfig: (c: UserConfig) => void, onSuccess: () => void }) => {
   const [apiKey, setApiKey] = useState(userConfig.geminiApiKey || "");
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -2922,7 +2951,10 @@ const SettingsView = ({ userConfig, setUserConfig }: { userConfig: UserConfig, s
     try {
       await saveUserConfig(auth.currentUser!.uid, { geminiApiKey: apiKey });
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 3000);
+      setTimeout(() => {
+        setSaveSuccess(false);
+        onSuccess();
+      }, 1000);
     } catch (err) {
       console.error(err);
     } finally {
@@ -2969,10 +3001,18 @@ const SettingsView = ({ userConfig, setUserConfig }: { userConfig: UserConfig, s
                 {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            <p className="text-[10px] text-natural-ink-light leading-relaxed">
-              Your API key is stored securely in Firebase. It is only used to generate lesson plans for you.
-              You can get a free key from your Google AI Studio dashboard.
-            </p>
+            <div className="space-y-4">
+              <p className="text-xs font-medium text-natural-ink/80 flex items-center gap-2">
+                <Sparkles className="w-3 h-3 text-indigo-500" />
+                Follow these steps to get your API key:
+              </p>
+              <ol className="text-[11px] space-y-2 text-natural-ink-light leading-relaxed list-decimal pl-4">
+                <li>Visit <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-medium">Google AI Studio</a>.</li>
+                <li>Click on the <strong>"Get API key"</strong> button in the left sidebar.</li>
+                <li>Click <strong>"Create API key"</strong> (it's free for individual use).</li>
+                <li>Copy your key and paste it into the field below.</li>
+              </ol>
+            </div>
           </div>
 
           <div className="pt-4 flex items-center justify-between">
@@ -3012,13 +3052,23 @@ const SettingsView = ({ userConfig, setUserConfig }: { userConfig: UserConfig, s
   );
 };
 
-const AdminDashboard = ({ allConfigs, loading }: { allConfigs: { uid: string, config: UserConfig }[] | null, loading: boolean }) => {
+const AdminDashboard = ({ allConfigs, loading, error }: { allConfigs: { uid: string, config: UserConfig }[] | null, loading: boolean, error: string | null }) => {
   const [copying, setCopying] = useState<string | null>(null);
+  const [revealedUids, setRevealedUids] = useState<Set<string>>(new Set());
 
   const handleCopy = (key: string, uid: string) => {
     navigator.clipboard.writeText(key);
     setCopying(uid);
     setTimeout(() => setCopying(null), 2000);
+  };
+
+  const toggleReveal = (uid: string) => {
+    setRevealedUids(prev => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
+      return next;
+    });
   };
 
   return (
@@ -3058,12 +3108,26 @@ const AdminDashboard = ({ allConfigs, loading }: { allConfigs: { uid: string, co
                     </div>
                   </td>
                 </tr>
-              ) : allConfigs?.length === 0 ? (
+              ) : error ? (
                 <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-natural-ink-light">No users found.</td>
+                  <td colSpan={4} className="px-6 py-12 text-center text-red-500 font-medium">
+                    <div className="flex flex-col items-center gap-2">
+                      <AlertCircleIcon className="w-8 h-8" />
+                      {error}
+                    </div>
+                  </td>
+                </tr>
+              ) : !allConfigs || allConfigs.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center gap-2 text-natural-ink-light">
+                      <ShieldAlert className="w-8 h-8 opacity-20" />
+                      <p>No user configurations found.</p>
+                    </div>
+                  </td>
                 </tr>
               ) : (
-                allConfigs?.map(({ uid, config }) => (
+                allConfigs.map(({ uid, config }) => (
                   <tr key={uid} className="hover:bg-natural-bg/30 dark:hover:bg-natural-bg-dark/30 transition-colors">
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
@@ -3081,13 +3145,28 @@ const AdminDashboard = ({ allConfigs, loading }: { allConfigs: { uid: string, co
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
                         {config.geminiApiKey ? (
                           <>
-                            <div className="w-32 h-2 bg-natural-sage/20 rounded-full overflow-hidden">
-                              <div className="w-full h-full bg-natural-sage/40" />
-                            </div>
-                            <span className="text-[10px] font-mono text-natural-ink-light">••••••••••</span>
+                            <button 
+                              onClick={() => toggleReveal(uid)}
+                              className="text-natural-ink-light hover:text-indigo-600 transition-colors p-1 rounded-lg hover:bg-indigo-50"
+                              title={revealedUids.has(uid) ? "Hide Key" : "View Key"}
+                            >
+                              {revealedUids.has(uid) ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            </button>
+                            {revealedUids.has(uid) ? (
+                              <span className="text-[10px] font-mono text-natural-ink bg-natural-bg px-2 py-0.5 rounded border border-natural-border break-all max-w-[200px]">
+                                {config.geminiApiKey}
+                              </span>
+                            ) : (
+                              <>
+                                <div className="w-32 h-2 bg-natural-sage/20 rounded-full overflow-hidden">
+                                  <div className="w-full h-full bg-natural-sage/40" />
+                                </div>
+                                <span className="text-[10px] font-mono text-natural-ink-light tracking-widest font-bold">••••••••</span>
+                              </>
+                            )}
                           </>
                         ) : (
                           <span className="text-xs italic text-natural-ink-light">No key stored</span>
