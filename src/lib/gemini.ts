@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { WeeklyLessonPlan, LessonPlanForm, SUBJECTS, CLASSES, LectureScript, PeriodPlan } from "../types";
 
 function getAI(userApiKey?: string) {
@@ -16,7 +16,7 @@ function getAI(userApiKey?: string) {
     }
     throw new Error("AI Configuration Missing: Please verify your Gemini API key.");
   }
-  return new GoogleGenerativeAI(apiKey);
+  return new GoogleGenAI({ apiKey });
 }
 
 export async function generateLessonPlan(
@@ -81,22 +81,23 @@ Each period must have:
 
 Ensure the progression is logical and fits the curriculum standards of the Pakistani education system.`;
 
-  const response = await ai.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: {
+    config: {
       responseMimeType: "application/json",
       responseSchema: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
           periods: {
-            type: SchemaType.ARRAY,
+            type: Type.ARRAY,
             items: {
-              type: SchemaType.OBJECT,
+              type: Type.OBJECT,
               properties: {
-                slo: { type: SchemaType.STRING, description: "Student Learning Objective" },
-                explanation: { type: SchemaType.STRING, description: "Main activities and name of the Graphic Organizer to be used" },
-                assessment: { type: SchemaType.STRING, description: "Activities/questions Adopted to assess learning" },
-                classworkAndHomework: { type: SchemaType.STRING, description: "Class work/ Homework assignments" }
+                slo: { type: Type.STRING, description: "Student Learning Objective" },
+                explanation: { type: Type.STRING, description: "Main activities and name of the Graphic Organizer to be used" },
+                assessment: { type: Type.STRING, description: "Activities/questions Adopted to assess learning" },
+                classworkAndHomework: { type: Type.STRING, description: "Class work/ Homework assignments" }
               },
               required: ["slo", "explanation", "assessment", "classworkAndHomework"]
             }
@@ -107,7 +108,7 @@ Ensure the progression is logical and fits the curriculum standards of the Pakis
     }
   });
 
-  const responseText = response.response.text();
+  const responseText = response.text;
   if (!responseText) throw new Error("No response from AI");
   
   try {
@@ -146,38 +147,39 @@ export async function generateLectureScript(
   
   Write in a professional yet engaging tone, suitable for classroom delivery.`;
 
-  const response = await ai.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
-    generationConfig: {
+    config: {
       responseMimeType: "application/json",
       responseSchema: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
-          title: { type: SchemaType.STRING },
-          introduction: { type: SchemaType.STRING },
+          title: { type: Type.STRING },
+          introduction: { type: Type.STRING },
           lecturePoints: {
-            type: SchemaType.ARRAY,
+            type: Type.ARRAY,
             items: {
-              type: SchemaType.OBJECT,
+              type: Type.OBJECT,
               properties: {
-                topic: { type: SchemaType.STRING },
-                script: { type: SchemaType.STRING }
+                topic: { type: Type.STRING },
+                script: { type: Type.STRING }
               },
               required: ["topic", "script"]
             }
           },
           keyQuestions: {
-            type: SchemaType.ARRAY,
-            items: { type: SchemaType.STRING }
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
           },
-          summary: { type: SchemaType.STRING }
+          summary: { type: Type.STRING }
         },
         required: ["title", "introduction", "lecturePoints", "keyQuestions", "summary"]
       }
     }
   });
 
-  const text = response.response.text();
+  const text = response.text;
   if (!text) throw new Error("No response from AI");
   return JSON.parse(text.trim());
 }
@@ -185,27 +187,28 @@ export async function generateLectureScript(
 export async function searchResources(query: string, userApiKey?: string): Promise<{ title: string; snippet: string; link: string }[]> {
   const ai = getAI(userApiKey);
   
-  const response = await ai.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
     contents: [{ role: "user", parts: [{ text: `Search for educational resources, lesson materials, and textbook-style content related to: ${query}. Return a list of relevant sources with titles, brief summaries, and links.` }] }],
-    tools: [{ googleSearch: {} }],
-    generationConfig: {
+    config: {
+      tools: [{ googleSearch: {} }],
       responseMimeType: "application/json",
       responseSchema: {
-        type: SchemaType.ARRAY,
+        type: Type.ARRAY,
         items: {
-          type: SchemaType.OBJECT,
+          type: Type.OBJECT,
           properties: {
-            title: { type: SchemaType.STRING },
-            snippet: { type: SchemaType.STRING },
-            link: { type: SchemaType.STRING }
+            title: { type: Type.STRING },
+            snippet: { type: Type.STRING },
+            link: { type: Type.STRING }
           },
           required: ["title", "snippet", "link"]
         }
       }
     }
-  } as any);
+  });
 
-  const text = response.response.text();
+  const text = response.text;
   if (!text) return [];
   try {
     return JSON.parse(text.trim());
@@ -249,25 +252,26 @@ If a field is not found, leave it empty.`;
   
   parts.push({ text: prompt });
 
-  const response = await ai.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
+  const response = await ai.models.generateContent({
+    model: "gemini-3-flash-preview",
     contents: [{ role: "user", parts }],
-    generationConfig: {
+    config: {
       responseMimeType: "application/json",
       responseSchema: {
-        type: SchemaType.OBJECT,
+        type: Type.OBJECT,
         properties: {
-          subject: { type: SchemaType.STRING },
-          className: { type: SchemaType.STRING },
-          chapter: { type: SchemaType.STRING },
-          topics: { type: SchemaType.STRING },
-          pageNos: { type: SchemaType.STRING },
-          content: { type: SchemaType.STRING, description: "Detailed text extraction of the documents" }
+          subject: { type: Type.STRING },
+          className: { type: Type.STRING },
+          chapter: { type: Type.STRING },
+          topics: { type: Type.STRING },
+          pageNos: { type: Type.STRING },
+          content: { type: Type.STRING, description: "Detailed text extraction of the documents" }
         }
       }
     }
   });
 
-  const text = response.response.text();
+  const text = response.text;
   if (!text) return {};
   try {
     return JSON.parse(text.trim());
