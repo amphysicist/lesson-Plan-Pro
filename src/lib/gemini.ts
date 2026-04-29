@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { WeeklyLessonPlan, LessonPlanForm, SUBJECTS, CLASSES, LectureScript, PeriodPlan } from "../types";
 
 function getAI(userApiKey?: string) {
   // Use user-provided key if available, otherwise try environment variables
-  const apiKey = userApiKey || (typeof process !== "undefined" ? process.env.GEMINI_API_KEY : "") || import.meta.env.VITE_GEMINI_API_KEY;
+  const apiKey = userApiKey || (typeof process !== "undefined" ? (process.env.GEMINI_API_KEY || "") : "") || import.meta.env.VITE_GEMINI_API_KEY;
   
   if (!apiKey) {
     if (userApiKey === "") {
@@ -16,7 +16,7 @@ function getAI(userApiKey?: string) {
     }
     throw new Error("AI Configuration Missing: Please verify your Gemini API key.");
   }
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenerativeAI(apiKey);
 }
 
 export async function generateLessonPlan(
@@ -86,17 +86,17 @@ Ensure the progression is logical and fits the curriculum standards of the Pakis
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: {
-        type: Type.OBJECT,
+        type: SchemaType.OBJECT,
         properties: {
           periods: {
-            type: Type.ARRAY,
+            type: SchemaType.ARRAY,
             items: {
-              type: Type.OBJECT,
+              type: SchemaType.OBJECT,
               properties: {
-                slo: { type: Type.STRING, description: "Student Learning Objective" },
-                explanation: { type: Type.STRING, description: "Main activities and name of the Graphic Organizer to be used" },
-                assessment: { type: Type.STRING, description: "Activities/questions Adopted to assess learning" },
-                classworkAndHomework: { type: Type.STRING, description: "Class work/ Homework assignments" }
+                slo: { type: SchemaType.STRING, description: "Student Learning Objective" },
+                explanation: { type: SchemaType.STRING, description: "Main activities and name of the Graphic Organizer to be used" },
+                assessment: { type: SchemaType.STRING, description: "Activities/questions Adopted to assess learning" },
+                classworkAndHomework: { type: SchemaType.STRING, description: "Class work/ Homework assignments" }
               },
               required: ["slo", "explanation", "assessment", "classworkAndHomework"]
             }
@@ -151,26 +151,26 @@ export async function generateLectureScript(
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: {
-        type: Type.OBJECT,
+        type: SchemaType.OBJECT,
         properties: {
-          title: { type: Type.STRING },
-          introduction: { type: Type.STRING },
+          title: { type: SchemaType.STRING },
+          introduction: { type: SchemaType.STRING },
           lecturePoints: {
-            type: Type.ARRAY,
+            type: SchemaType.ARRAY,
             items: {
-              type: Type.OBJECT,
+              type: SchemaType.OBJECT,
               properties: {
-                topic: { type: Type.STRING },
-                script: { type: Type.STRING }
+                topic: { type: SchemaType.STRING },
+                script: { type: SchemaType.STRING }
               },
               required: ["topic", "script"]
             }
           },
           keyQuestions: {
-            type: Type.ARRAY,
-            items: { type: Type.STRING }
+            type: SchemaType.ARRAY,
+            items: { type: SchemaType.STRING }
           },
-          summary: { type: Type.STRING }
+          summary: { type: SchemaType.STRING }
         },
         required: ["title", "introduction", "lecturePoints", "keyQuestions", "summary"]
       }
@@ -191,13 +191,13 @@ export async function searchResources(query: string, userApiKey?: string): Promi
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: {
-        type: Type.ARRAY,
+        type: SchemaType.ARRAY,
         items: {
-          type: Type.OBJECT,
+          type: SchemaType.OBJECT,
           properties: {
-            title: { type: Type.STRING },
-            snippet: { type: Type.STRING },
-            link: { type: Type.STRING }
+            title: { type: SchemaType.STRING },
+            snippet: { type: SchemaType.STRING },
+            link: { type: SchemaType.STRING }
           },
           required: ["title", "snippet", "link"]
         }
@@ -254,14 +254,14 @@ If a field is not found, leave it empty.`;
     generationConfig: {
       responseMimeType: "application/json",
       responseSchema: {
-        type: Type.OBJECT,
+        type: SchemaType.OBJECT,
         properties: {
-          subject: { type: Type.STRING },
-          className: { type: Type.STRING },
-          chapter: { type: Type.STRING },
-          topics: { type: Type.STRING },
-          pageNos: { type: Type.STRING },
-          content: { type: Type.STRING, description: "Detailed text extraction of the documents" }
+          subject: { type: SchemaType.STRING },
+          className: { type: SchemaType.STRING },
+          chapter: { type: SchemaType.STRING },
+          topics: { type: SchemaType.STRING },
+          pageNos: { type: SchemaType.STRING },
+          content: { type: SchemaType.STRING, description: "Detailed text extraction of the documents" }
         }
       }
     }

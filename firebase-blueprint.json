@@ -12,10 +12,18 @@
       "required": ["email", "isAdmin"]
     }
   },
-  "firestore": {
-    "/user_configs/{userId}": {
-      "schema": "UserConfig",
-      "description": "User configuration documents keyed by UID."
+  "database": {
+    "realtime": {
+      "/user_configs/{userId}": {
+        "schema": "UserConfig",
+        "description": "User configuration documents keyed by UID."
+      },
+      "/lessonPlans/{planId}": {
+        "description": "Publicly shared lesson plans."
+      },
+      "/archivedPlans/{planId}": {
+        "description": "Private archived lesson plans for users."
+      }
     }
   }
 }

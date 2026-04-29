@@ -1,20 +1,18 @@
 import { initializeApp } from 'firebase/app';
 import { 
-  getFirestore, 
-  doc, 
-  getDoc, 
-  addDoc, 
-  collection, 
-  serverTimestamp,
-  getDocFromServer,
-  query,
-  where,
-  orderBy,
-  getDocs,
-  deleteDoc,
-  setDoc,
-  onSnapshot
-} from 'firebase/firestore';
+  getDatabase, 
+  ref, 
+  set, 
+  get, 
+  push, 
+  remove, 
+  update, 
+  onValue, 
+  query, 
+  orderByChild, 
+  equalTo,
+  serverTimestamp
+} from 'firebase/database';
 import { 
   getAuth, 
   GoogleAuthProvider, 
@@ -39,12 +37,11 @@ export const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigJSON.messagingSenderId,
   appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseConfigJSON.appId,
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || firebaseConfigJSON.measurementId,
-  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_DATABASE_ID || firebaseConfigJSON.firestoreDatabaseId,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || `https://${import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfigJSON.projectId}-default-rtdb.firebaseio.com/`,
 };
 
 const app = initializeApp(firebaseConfig);
-// Explicitly use the databaseId from config
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const db = getDatabase(app);
 export const auth = getAuth(app);
 export { 
   onAuthStateChanged, 
@@ -59,12 +56,16 @@ export const googleProvider = new GoogleAuthProvider();
 
 export async function testConnection() {
   try {
-    // Attempt to read a dummy doc from server to verify connectivity
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    const connectedRef = ref(db, ".info/connected");
+    onValue(connectedRef, (snap) => {
+      if (snap.val() === true) {
+        console.log("Connected to Realtime Database");
+      } else {
+        console.warn("Disconnected from Realtime Database");
+      }
+    });
   } catch (error) {
-    if(error instanceof Error && error.message.includes('offline')) {
-      console.error("Firebase is offline. Check your configuration.");
-    }
+    console.error("Firebase connection test failed:", error);
   }
 }
 
@@ -77,7 +78,7 @@ export interface SharedPlan {
   createdAt: any;
 }
 
-export interface FirestoreErrorInfo {
+export interface FirebaseErrorInfo {
   error: string;
   operationType: 'create' | 'update' | 'delete' | 'list' | 'get' | 'write';
   path: string | null;
@@ -90,9 +91,9 @@ export interface FirestoreErrorInfo {
   }
 }
 
-function handleFirestoreError(err: any, operationType: FirestoreErrorInfo['operationType'], path: string | null = null): never {
-  if (err.code === 'permission-denied') {
-    const errorInfo: FirestoreErrorInfo = {
+function handleFirebaseError(err: any, operationType: FirebaseErrorInfo['operationType'], path: string | null = null): never {
+  if (err.code === 'PERMISSION_DENIED') {
+    const errorInfo: FirebaseErrorInfo = {
       error: err.message,
       operationType,
       path,
@@ -121,7 +122,9 @@ export async function sharePlan(form: any, plan: any) {
   if (!auth.currentUser) throw new Error("Authentication required to share.");
 
   try {
-    const docRef = await addDoc(collection(db, 'lessonPlans'), {
+    const plansRef = ref(db, 'lessonPlans');
+    const newPlanRef = push(plansRef);
+    await set(newPlanRef, {
       form,
       plan,
       authorId: auth.currentUser.uid,
@@ -129,9 +132,9 @@ export async function sharePlan(form: any, plan: any) {
       createdAt: serverTimestamp()
     });
 
-    return docRef.id;
+    return newPlanRef.key;
   } catch (err: any) {
-    return handleFirestoreError(err, 'create', 'lessonPlans');
+    return handleFirebaseError(err, 'create', 'lessonPlans');
   }
 }
 
@@ -143,7 +146,9 @@ export async function archivePlan(form: any, plan: any) {
   if (!auth.currentUser) throw new Error("Authentication required to archive.");
 
   try {
-    const docRef = await addDoc(collection(db, 'archivedPlans'), {
+    const archivesRef = ref(db, 'archivedPlans');
+    const newArchiveRef = push(archivesRef);
+    await set(newArchiveRef, {
       form,
       plan,
       authorId: auth.currentUser.uid,
@@ -151,9 +156,9 @@ export async function archivePlan(form: any, plan: any) {
       createdAt: serverTimestamp()
     });
 
-    return docRef.id;
+    return newArchiveRef.key;
   } catch (err: any) {
-    return handleFirestoreError(err, 'create', 'archivedPlans');
+    return handleFirebaseError(err, 'create', 'archivedPlans');
   }
 }
 
@@ -161,86 +166,98 @@ export async function getArchivedPlans(): Promise<SharedPlan[]> {
   if (!auth.currentUser) return [];
 
   try {
-    const q = query(
-      collection(db, 'archivedPlans'),
-      where('authorId', '==', auth.currentUser.uid),
-      orderBy('createdAt', 'desc')
-    );
-
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as SharedPlan[];
+    const archivesRef = ref(db, 'archivedPlans');
+    const q = query(archivesRef, orderByChild('authorId'), equalTo(auth.currentUser.uid));
+    const snapshot = await get(q);
+    
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      const plans = Object.keys(data).map(key => ({
+        id: key,
+        ...data[key]
+      }));
+      // Sort by createdAt desc manually if needed, or rely on another query if possible.
+      // RTDB queries only support one orderBy.
+      return plans.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)) as SharedPlan[];
+    }
+    return [];
   } catch (err: any) {
-    return handleFirestoreError(err, 'list', 'archivedPlans');
+    return handleFirebaseError(err, 'list', 'archivedPlans');
   }
 }
 
 export async function deleteArchivedPlan(id: string) {
   if (!auth.currentUser) throw new Error("Auth required");
   try {
-    await deleteDoc(doc(db, 'archivedPlans', id));
+    await remove(ref(db, `archivedPlans/${id}`));
   } catch (err: any) {
-    return handleFirestoreError(err, 'delete', `archivedPlans/${id}`);
+    return handleFirebaseError(err, 'delete', `archivedPlans/${id}`);
   }
 }
 
 export async function getSharedPlan(id: string): Promise<SharedPlan | null> {
-  const docRef = doc(db, 'lessonPlans', id);
-  const docSnap = await getDoc(docRef);
-  
-  if (docSnap.exists()) {
-    return docSnap.data() as SharedPlan;
+  try {
+    const snapshot = await get(ref(db, `lessonPlans/${id}`));
+    if (snapshot.exists()) {
+      return snapshot.val() as SharedPlan;
+    }
+    return null;
+  } catch (err: any) {
+    return handleFirebaseError(err, 'get', `lessonPlans/${id}`);
   }
-  return null;
 }
 
 export async function getUserConfig(uid: string): Promise<UserConfig | null> {
   try {
-    const docRef = doc(db, 'user_configs', uid);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      return docSnap.data() as UserConfig;
+    const snapshot = await get(ref(db, `user_configs/${uid}`));
+    if (snapshot.exists()) {
+      return snapshot.val() as UserConfig;
     }
     return null;
   } catch (err: any) {
-    return handleFirestoreError(err, 'get', `user_configs/${uid}`);
+    return handleFirebaseError(err, 'get', `user_configs/${uid}`);
   }
 }
 
 export async function saveUserConfig(uid: string, config: Partial<UserConfig>) {
   try {
-    const docRef = doc(db, 'user_configs', uid);
-    await setDoc(docRef, config, { merge: true });
+    const configRef = ref(db, `user_configs/${uid}`);
+    await update(configRef, config);
   } catch (err: any) {
-    return handleFirestoreError(err, 'update', `user_configs/${uid}`);
+    return handleFirebaseError(err, 'update', `user_configs/${uid}`);
   }
 }
 
 export async function getAllUserConfigs(): Promise<{ uid: string; config: UserConfig }[]> {
   try {
-    const q = query(collection(db, 'user_configs'), orderBy('email', 'asc'));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      uid: doc.id,
-      config: doc.data() as UserConfig
-    }));
+    const configRef = ref(db, 'user_configs');
+    // RTDB orderByChild('email') works if the data has an email field.
+    const q = query(configRef, orderByChild('email'));
+    const snapshot = await get(q);
+    
+    if (snapshot.exists()) {
+      const data = snapshot.val();
+      return Object.keys(data).map(uid => ({
+        uid,
+        config: data[uid] as UserConfig
+      }));
+    }
+    return [];
   } catch (err: any) {
-    return handleFirestoreError(err, 'list', 'user_configs');
+    return handleFirebaseError(err, 'list', 'user_configs');
   }
 }
 
 export function subscribeToUserConfig(uid: string, onUpdate: (config: UserConfig | null) => void) {
-  const docRef = doc(db, 'user_configs', uid);
-  return onSnapshot(docRef, (doc) => {
-    if (doc.exists()) {
-      onUpdate(doc.data() as UserConfig);
+  const configRef = ref(db, `user_configs/${uid}`);
+  return onValue(configRef, (snapshot) => {
+    if (snapshot.exists()) {
+      onUpdate(snapshot.val() as UserConfig);
     } else {
       onUpdate(null);
     }
   }, (err) => {
-    handleFirestoreError(err, 'get', `user_configs/${uid}`);
+    handleFirebaseError(err, 'get', `user_configs/${uid}`);
   });
 }
 

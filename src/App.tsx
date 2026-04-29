@@ -78,7 +78,8 @@ import {
   LectureScript,
   PeriodPlan,
   Source,
-  SourceType
+  SourceType,
+  UserConfig
 } from "./types";
 import { generateLessonPlan, extractPlanInfo, generateLectureScript, searchResources } from "./lib/gemini";
 import { 
@@ -105,17 +106,6 @@ import {
 } from "./lib/firebase";
 import { QRCodeSVG } from 'qrcode.react';
 import ReCAPTCHA from "react-google-recaptcha";
-import { 
-  PeriodPlan, 
-  WeeklyLessonPlan, 
-  LessonPlanForm, 
-  SUBJECTS, 
-  CLASSES, 
-  Source, 
-  SourceType,
-  LectureScript,
-  UserConfig
-} from "./types";
 
 const extractTextFromPDF = async (file: File): Promise<string> => {
   const arrayBuffer = await file.arrayBuffer();
@@ -2980,7 +2970,7 @@ const SettingsView = ({ userConfig, setUserConfig }: { userConfig: UserConfig, s
               </button>
             </div>
             <p className="text-[10px] text-natural-ink-light leading-relaxed">
-              Your API key is stored securely in Firestore. It is only used to generate lesson plans for you.
+              Your API key is stored securely in Firebase. It is only used to generate lesson plans for you.
               You can get a free key from your Google AI Studio dashboard.
             </p>
           </div>
