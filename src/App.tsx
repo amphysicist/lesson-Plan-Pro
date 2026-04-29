@@ -68,7 +68,8 @@ import {
   Settings,
   Eye,
   EyeOff,
-  ShieldAlert
+  ShieldAlert,
+  ShieldCheck
 } from "lucide-react";
 import { 
   SUBJECTS, 
@@ -102,7 +103,8 @@ import {
   getUserConfig,
   saveUserConfig,
   getAllUserConfigs,
-  subscribeToUserConfig
+  subscribeToUserConfig,
+  getGlobalAPIKeys
 } from "./lib/firebase";
 import { QRCodeSVG } from 'qrcode.react';
 import ReCAPTCHA from "react-google-recaptcha";
@@ -435,6 +437,14 @@ export default function App() {
   const [allUserConfigs, setAllUserConfigs] = useState<{ uid: string; config: UserConfig }[] | null>(null);
   const [adminLoading, setAdminLoading] = useState(false);
   const [adminError, setAdminError] = useState<string | null>(null);
+  const [globalBackupKeys, setGlobalBackupKeys] = useState<string[]>([]);
+
+  const allBackupKeys = (userConfig?.geminiApiKey || userConfig?.isAdmin) 
+    ? Array.from(new Set([
+        ...(userConfig?.apiKeys || []),
+        ...globalBackupKeys
+      ])).filter(k => k && k !== userConfig?.geminiApiKey)
+    : [];
 
   // Initialize PDF.js worker safely
   useEffect(() => {
@@ -562,6 +572,7 @@ export default function App() {
       setUser(u);
       if (u) {
         getArchivedPlans().then(setArchivedPlans).catch(console.error);
+        getGlobalAPIKeys().then(setGlobalBackupKeys);
         
         // Subscribe to user config
         unsubscribeUserConfig = subscribeToUserConfig(u.uid, (config) => {
@@ -697,7 +708,8 @@ export default function App() {
         form.topics,
         parseInt(form.numPeriods),
         contextualContent,
-        userConfig?.geminiApiKey
+        userConfig?.geminiApiKey,
+        allBackupKeys
       );
       // Ensure we only keep the number of periods requested
       const slicedPlan = {
@@ -859,7 +871,7 @@ export default function App() {
     }
     setIsSearching(true);
     try {
-      const results = await searchResources(searchQuery, userConfig?.geminiApiKey);
+      const results = await searchResources(searchQuery, userConfig?.geminiApiKey, allBackupKeys);
       setSearchResults(results);
     } catch (err) {
       console.error("Search failed:", err);
@@ -921,7 +933,7 @@ export default function App() {
         return `[Source: ${s.title} (${s.type})]: ${s.content}`;
       });
 
-      const res = await extractPlanInfo(contentsForGemini, userConfig?.geminiApiKey);
+      const res = await extractPlanInfo(contentsForGemini, userConfig?.geminiApiKey, allBackupKeys);
       
       setForm(f => ({
         ...f,
@@ -1344,7 +1356,8 @@ ${lectureScript.summary}
         form.className,
         form.chapter,
         plan.periods[periodIndex],
-        userConfig?.geminiApiKey
+        userConfig?.geminiApiKey,
+        allBackupKeys
       );
       setLectureScript(script);
       setActivePeriodForLecture(periodIndex);
@@ -2941,6 +2954,7 @@ ${lectureScript.summary}
 // Sub-components for Settings and Admin
 const SettingsView = ({ userConfig, setUserConfig, onSuccess }: { userConfig: UserConfig, setUserConfig: (c: UserConfig) => void, onSuccess: () => void }) => {
   const [apiKey, setApiKey] = useState(userConfig.geminiApiKey || "");
+  const [apiKeys, setApiKeys] = useState<string[]>(userConfig.apiKeys || []);
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -2949,7 +2963,10 @@ const SettingsView = ({ userConfig, setUserConfig, onSuccess }: { userConfig: Us
     e.preventDefault();
     setSaving(true);
     try {
-      await saveUserConfig(auth.currentUser!.uid, { geminiApiKey: apiKey });
+      await saveUserConfig(auth.currentUser!.uid, { 
+        geminiApiKey: apiKey,
+        apiKeys: apiKeys.filter(k => !!k) 
+      });
       setSaveSuccess(true);
       setTimeout(() => {
         setSaveSuccess(false);
@@ -2960,6 +2977,14 @@ const SettingsView = ({ userConfig, setUserConfig, onSuccess }: { userConfig: Us
     } finally {
       setSaving(false);
     }
+  };
+
+  const addKey = () => setApiKeys([...apiKeys, ""]);
+  const removeKey = (idx: number) => setApiKeys(apiKeys.filter((_, i) => i !== idx));
+  const updateKey = (idx: number, val: string) => {
+    const next = [...apiKeys];
+    next[idx] = val;
+    setApiKeys(next);
   };
 
   return (
@@ -2982,7 +3007,7 @@ const SettingsView = ({ userConfig, setUserConfig, onSuccess }: { userConfig: Us
         <form onSubmit={handleSave} className="space-y-6">
           <div className="space-y-2">
             <label className="text-sm font-bold text-natural-ink dark:text-natural-ink-dark flex items-center gap-2">
-              Gemini API Key
+              Primary Gemini API Key
               <Sparkles className="w-3 h-3 text-natural-sage" />
             </label>
             <div className="relative">
@@ -2990,7 +3015,7 @@ const SettingsView = ({ userConfig, setUserConfig, onSuccess }: { userConfig: Us
                 type={showKey ? "text" : "password"}
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="Enter your Gemini API Key..."
+                placeholder="Enter your Primary Gemini API Key..."
                 className="w-full pl-4 pr-12 py-3 bg-natural-bg dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark rounded-xl focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage outline-none transition-all text-natural-ink dark:text-natural-ink-dark"
               />
               <button 
@@ -3001,16 +3026,62 @@ const SettingsView = ({ userConfig, setUserConfig, onSuccess }: { userConfig: Us
                 {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
-            <div className="space-y-4">
+            
+            {userConfig.isAdmin && (
+              <div className="mt-8 space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-bold text-natural-ink dark:text-natural-ink-dark flex items-center gap-2">
+                    Backup API Keys (Auto-Rotate)
+                    <ShieldCheck className="w-3 h-3 text-indigo-500" />
+                  </label>
+                  <button 
+                    type="button"
+                    onClick={addKey}
+                    className="text-[10px] bg-indigo-50 text-indigo-600 px-2 py-1 rounded-lg hover:bg-indigo-100 transition-colors flex items-center gap-1 font-bold"
+                  >
+                    <Plus className="w-3 h-3" /> Add Key
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {apiKeys.map((key, idx) => (
+                    <div key={idx} className="flex gap-2">
+                      <div className="relative flex-1">
+                        <input 
+                          type="password"
+                          value={key}
+                          onChange={(e) => updateKey(idx, e.target.value)}
+                          placeholder={`Backup Key #${idx + 1}`}
+                          className="w-full px-3 py-2 text-xs bg-natural-bg dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark rounded-lg outline-none focus:ring-1 focus:ring-indigo-500 transition-all font-mono"
+                        />
+                      </div>
+                      <button 
+                        type="button"
+                        onClick={() => removeKey(idx)}
+                        className="p-2 text-red-400 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                  {apiKeys.length === 0 && (
+                    <p className="text-[10px] italic text-natural-ink-light">No backup keys added. System will only use the primary key.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-4 pt-4">
               <p className="text-xs font-medium text-natural-ink/80 flex items-center gap-2">
                 <Sparkles className="w-3 h-3 text-indigo-500" />
                 Follow these steps to get your API key:
               </p>
-              <ol className="text-[11px] space-y-2 text-natural-ink-light leading-relaxed list-decimal pl-4">
-                <li>Visit <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-medium">Google AI Studio</a>.</li>
-                <li>Click on the <strong>"Get API key"</strong> button in the left sidebar.</li>
-                <li>Click <strong>"Create API key"</strong> (it's free for individual use).</li>
-                <li>Copy your key and paste it into the field below.</li>
+              <ol className="text-[11px] space-y-3 text-natural-ink-light leading-relaxed list-decimal pl-4">
+                <li className="pl-1">Visit <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-bold">Google AI Studio</a>.</li>
+                <li className="pl-1">Click on the <strong>"Get API key"</strong> button in the left sidebar menu.</li>
+                <li className="pl-1">Click <strong>"Create API key in new project"</strong> (this is free).</li>
+                <li className="pl-1">Copy the generated key (looks like <code>AIza...</code>).</li>
+                <li className="pl-1">Return here and paste it into the <strong>Primary Gemini API Key</strong> field.</li>
+                <li className="pl-1">Click <strong>"Save Settings"</strong> to enable lesson plan generation.</li>
               </ol>
             </div>
           </div>

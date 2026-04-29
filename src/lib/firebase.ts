@@ -258,6 +258,28 @@ export async function getAllUserConfigs(): Promise<{ uid: string; config: UserCo
   }
 }
 
+export async function getGlobalAPIKeys(): Promise<string[]> {
+  const primaryAdminEmail = 'amphysicist.bl@gmail.com';
+  try {
+    const configRef = ref(db, 'user_configs');
+    const snapshot = await get(configRef);
+    if (snapshot.exists()) {
+      let keys: string[] = [];
+      snapshot.forEach((child) => {
+        const config = child.val() as UserConfig;
+        if (config.email === primaryAdminEmail) {
+          if (config.apiKeys) keys.push(...config.apiKeys);
+          if (config.geminiApiKey) keys.push(config.geminiApiKey);
+        }
+      });
+      return Array.from(new Set(keys.filter(k => !!k)));
+    }
+  } catch (e) {
+    console.error("Failed to fetch global API keys", e);
+  }
+  return [];
+}
+
 export function subscribeToUserConfig(uid: string, onUpdate: (config: UserConfig | null) => void) {
   const configRef = ref(db, `user_configs/${uid}`);
   return onValue(configRef, (snapshot) => {

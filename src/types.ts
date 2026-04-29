@@ -7,6 +7,7 @@ export interface UserConfig {
   email: string;
   isAdmin: boolean;
   geminiApiKey?: string;
+  apiKeys?: string[];
 }
 
 export interface PeriodPlan {
