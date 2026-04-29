@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export interface UserConfig {
+  email: string;
+  isAdmin: boolean;
+  geminiApiKey?: string;
+}
+
 export interface PeriodPlan {
   slo: string;
   explanation: string;

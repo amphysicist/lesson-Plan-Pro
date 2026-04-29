@@ -1,35 +1,74 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // 1. Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function incoming() {
+      return request.resource.data;
+    }
+    
+    function existing() {
+      return resource.data;
+    }
+
+    function isBootstrapAdmin() {
+      return request.auth.token.email == 'amphysicist.bl@gmail.com' && request.auth.token.email_verified == true;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        isBootstrapAdmin() ||
+        get(/databases/$(database)/documents/user_configs/$(request.auth.uid)).data.isAdmin == true
+      );
+    }
+
+    // 2. Default Deny
     match /{document=**} {
       allow read, write: if false;
     }
 
-    function isSignedIn() {
-      return request.auth != null;
-    }
+    // 3. User Configs Collection
+    match /user_configs/{userId} {
+      function isOwner(uid) {
+        return isSignedIn() && request.auth.uid == uid;
+      }
 
-    function isValidLessonPlan(data) {
-      return data.keys().hasAll(['form', 'plan', 'authorId', 'authorName', 'createdAt']) &&
-             data.form is map &&
-             data.plan is map &&
-             data.authorId is string &&
-             data.authorName is string &&
-             data.createdAt == request.time;
-    }
+      function isValidUserConfig(data) {
+        return data.keys().hasAll(['email', 'isAdmin']) &&
+               data.email is string && data.email.size() <= 256 &&
+               data.isAdmin is bool &&
+               (!('geminiApiKey' in data) || (data.geminiApiKey is string && data.geminiApiKey.size() <= 200));
+      }
 
-    match /lessonPlans/{planId} {
-      allow read: if true; // Publicly shared
-      allow create: if isSignedIn() && isValidLessonPlan(request.resource.data) && 
-                      request.resource.data.authorId == (request.auth.uid == null ? 'anonymous' : request.auth.uid);
-      allow update, delete: if isSignedIn() && request.auth.uid == resource.data.authorId;
-    }
+      // Read access: Owner or Admin
+      allow get: if isOwner(userId) || isAdmin();
+      
+      // List access: Only Admin
+      allow list: if isAdmin();
 
-    match /archivedPlans/{planId} {
-      allow read: if isSignedIn() && resource.data.authorId == request.auth.uid;
-      allow create: if isSignedIn() && isValidLessonPlan(request.resource.data) && 
-                      request.resource.data.authorId == request.auth.uid;
-      allow update, delete: if isSignedIn() && resource.data.authorId == request.auth.uid;
+      // Create: Users can create their own doc but cannot make themselves admin
+      allow create: if isOwner(userId) && 
+                      isValidUserConfig(incoming()) && 
+                      (incoming().isAdmin == false || isBootstrapAdmin());
+
+      // Update: Owner can update their doc
+      allow update: if isOwner(userId) && 
+                      isValidUserConfig(incoming()) && (
+                        // Admins can change everything
+                        isAdmin() || 
+                        // Regular users cannot change their isAdmin status
+                        (incoming().isAdmin == existing().isAdmin)
+                      );
+      
+      // Delete: Only Admin or Owner
+      allow delete: if isOwner(userId) || isAdmin();
     }
   }
 }

@@ -1,26 +1,21 @@
 {
   "entities": {
-    "LessonPlan": {
-      "title": "Lesson Plan",
-      "description": "A shared weekly lesson plan.",
+    "UserConfig": {
+      "title": "User Configuration",
+      "description": "Stores user-specific settings including API keys and admin status.",
       "type": "object",
       "properties": {
-        "form": { "type": "object", "description": "The lesson plan configuration and metadata" },
-        "plan": { "type": "object", "description": "The generated periods and SLOs" },
-        "createdAt": { "type": "string", "format": "date-time" },
-        "isPublic": { "type": "boolean", "default": true }
+        "email": { "type": "string", "format": "email" },
+        "geminiApiKey": { "type": "string", "description": "Encrypted or plain text API key for Gemini" },
+        "isAdmin": { "type": "boolean", "default": false }
       },
-      "required": ["form", "plan", "createdAt"]
+      "required": ["email", "isAdmin"]
     }
   },
   "firestore": {
-    "/lessonPlans/{planId}": {
-      "schema": "LessonPlan",
-      "description": "Collection of shared lesson plans."
-    },
-    "/archivedPlans/{planId}": {
-      "schema": "LessonPlan",
-      "description": "Private collection of stored lesson plans for users."
+    "/user_configs/{userId}": {
+      "schema": "UserConfig",
+      "description": "User configuration documents keyed by UID."
     }
   }
 }

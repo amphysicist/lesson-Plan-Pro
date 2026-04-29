@@ -6,19 +6,17 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { WeeklyLessonPlan, LessonPlanForm, SUBJECTS, CLASSES, LectureScript, PeriodPlan } from "../types";
 
-let aiInstance: GoogleGenAI | null = null;
-
-function getAI() {
-  if (!aiInstance) {
-    // Try process.env (AI Studio) first, then import.meta.env (Vite/Vercel)
-    const apiKey = (typeof process !== "undefined" ? process.env.GEMINI_API_KEY : "") || import.meta.env.VITE_GEMINI_API_KEY;
-    
-    if (!apiKey) {
-      throw new Error("AI Configuration Missing: The GEMINI_API_KEY or VITE_GEMINI_API_KEY environment variable is not defined. Please check your Vercel Environment Variables.");
+function getAI(userApiKey?: string) {
+  // Use user-provided key if available, otherwise try environment variables
+  const apiKey = userApiKey || (typeof process !== "undefined" ? process.env.GEMINI_API_KEY : "") || import.meta.env.VITE_GEMINI_API_KEY;
+  
+  if (!apiKey) {
+    if (userApiKey === "") {
+        throw new Error("Please add your Gemini API Key in Settings to generate lesson plans.");
     }
-    aiInstance = new GoogleGenAI({ apiKey });
+    throw new Error("AI Configuration Missing: Please verify your Gemini API key.");
   }
-  return aiInstance;
+  return new GoogleGenAI({ apiKey });
 }
 
 export async function generateLessonPlan(
@@ -27,9 +25,10 @@ export async function generateLessonPlan(
   chapter: string,
   topics: string,
   numPeriods: number,
-  content: string
+  content: string,
+  userApiKey?: string
 ): Promise<WeeklyLessonPlan> {
-  const ai = getAI();
+  const ai = getAI(userApiKey);
   
   // Complexity & Tone Guidance based on class
   let pedagogicalGuidance = "";
@@ -82,10 +81,9 @@ Each period must have:
 
 Ensure the progression is logical and fits the curriculum standards of the Pakistani education system.`;
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+  const response = await ai.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
-    config: {
+    generationConfig: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -109,7 +107,7 @@ Ensure the progression is logical and fits the curriculum standards of the Pakis
     }
   });
 
-  const responseText = response.text;
+  const responseText = response.response.text();
   if (!responseText) throw new Error("No response from AI");
   
   try {
@@ -124,9 +122,10 @@ export async function generateLectureScript(
   subject: string,
   className: string,
   chapter: string,
-  period: PeriodPlan
+  period: PeriodPlan,
+  userApiKey?: string
 ): Promise<LectureScript> {
-  const ai = getAI();
+  const ai = getAI(userApiKey);
   
   const prompt = `You are an expert educator. Based on the following Weekly Lesson Plan period details, expand it into a comprehensive LECTURE SCRIPT for a teacher to deliver in class.
   
@@ -147,10 +146,9 @@ export async function generateLectureScript(
   
   Write in a professional yet engaging tone, suitable for classroom delivery.`;
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+  const response = await ai.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
     contents: [{ role: "user", parts: [{ text: prompt }] }],
-    config: {
+    generationConfig: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -179,19 +177,18 @@ export async function generateLectureScript(
     }
   });
 
-  const text = response.text;
+  const text = response.response.text();
   if (!text) throw new Error("No response from AI");
   return JSON.parse(text.trim());
 }
 
-export async function searchResources(query: string): Promise<{ title: string; snippet: string; link: string }[]> {
-  const ai = getAI();
+export async function searchResources(query: string, userApiKey?: string): Promise<{ title: string; snippet: string; link: string }[]> {
+  const ai = getAI(userApiKey);
   
-  const response = await (ai.models as any).generateContent({
-    model: "gemini-3-flash-preview",
+  const response = await ai.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
     contents: [{ role: "user", parts: [{ text: `Search for educational resources, lesson materials, and textbook-style content related to: ${query}. Return a list of relevant sources with titles, brief summaries, and links.` }] }],
     tools: [{ googleSearch: {} }],
-    config: {
+    generationConfig: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.ARRAY,
@@ -206,9 +203,9 @@ export async function searchResources(query: string): Promise<{ title: string; s
         }
       }
     }
-  });
+  } as any);
 
-  const text = response.text;
+  const text = response.response.text();
   if (!text) return [];
   try {
     return JSON.parse(text.trim());
@@ -218,9 +215,10 @@ export async function searchResources(query: string): Promise<{ title: string; s
 }
 
 export async function extractPlanInfo(
-  contentsArray: (string | { data: string; mimeType: string })[]
+  contentsArray: (string | { data: string; mimeType: string })[],
+  userApiKey?: string
 ): Promise<Partial<LessonPlanForm>> {
-  const ai = getAI();
+  const ai = getAI(userApiKey);
   
   const prompt = `You are a helpful assistant that extracts educational metadata and detailed textbook content from images, PDFs, or teacher notes.
 Analyze all the provided documents collectively and extract:
@@ -251,10 +249,9 @@ If a field is not found, leave it empty.`;
   
   parts.push({ text: prompt });
 
-  const response = await ai.models.generateContent({
-    model: "gemini-3-flash-preview",
+  const response = await ai.getGenerativeModel({ model: "gemini-1.5-flash" }).generateContent({
     contents: [{ role: "user", parts }],
-    config: {
+    generationConfig: {
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -270,7 +267,7 @@ If a field is not found, leave it empty.`;
     }
   });
 
-  const text = response.text;
+  const text = response.response.text();
   if (!text) return {};
   try {
     return JSON.parse(text.trim());
@@ -278,3 +275,4 @@ If a field is not found, leave it empty.`;
     return {};
   }
 }
+

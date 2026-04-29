@@ -11,7 +11,9 @@ import {
   where,
   orderBy,
   getDocs,
-  deleteDoc
+  deleteDoc,
+  setDoc,
+  onSnapshot
 } from 'firebase/firestore';
 import { 
   getAuth, 
@@ -25,6 +27,7 @@ import {
   sendPasswordResetEmail
 } from 'firebase/auth';
 import firebaseConfigJSON from '../../firebase-applet-config.json';
+import { UserConfig } from '../types';
 
 // Use environment variables if available (prefixed with VITE_ for client-side Vite)
 // otherwise fallback to the JSON config file.
@@ -192,3 +195,52 @@ export async function getSharedPlan(id: string): Promise<SharedPlan | null> {
   }
   return null;
 }
+
+export async function getUserConfig(uid: string): Promise<UserConfig | null> {
+  try {
+    const docRef = doc(db, 'user_configs', uid);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return docSnap.data() as UserConfig;
+    }
+    return null;
+  } catch (err: any) {
+    return handleFirestoreError(err, 'get', `user_configs/${uid}`);
+  }
+}
+
+export async function saveUserConfig(uid: string, config: Partial<UserConfig>) {
+  try {
+    const docRef = doc(db, 'user_configs', uid);
+    await setDoc(docRef, config, { merge: true });
+  } catch (err: any) {
+    return handleFirestoreError(err, 'update', `user_configs/${uid}`);
+  }
+}
+
+export async function getAllUserConfigs(): Promise<{ uid: string; config: UserConfig }[]> {
+  try {
+    const q = query(collection(db, 'user_configs'), orderBy('email', 'asc'));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({
+      uid: doc.id,
+      config: doc.data() as UserConfig
+    }));
+  } catch (err: any) {
+    return handleFirestoreError(err, 'list', 'user_configs');
+  }
+}
+
+export function subscribeToUserConfig(uid: string, onUpdate: (config: UserConfig | null) => void) {
+  const docRef = doc(db, 'user_configs', uid);
+  return onSnapshot(docRef, (doc) => {
+    if (doc.exists()) {
+      onUpdate(doc.data() as UserConfig);
+    } else {
+      onUpdate(null);
+    }
+  }, (err) => {
+    handleFirestoreError(err, 'get', `user_configs/${uid}`);
+  });
+}
+
