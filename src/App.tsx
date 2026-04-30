@@ -122,7 +122,7 @@ const extractTextFromPDF = async (file: File): Promise<string> => {
   return fullText;
 };
 
-const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
+const Auth = ({ onAuthSuccess, isDarkMode }: { onAuthSuccess: () => void; isDarkMode: boolean }) => {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -214,29 +214,29 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-[#0a0510] relative overflow-hidden p-4 sm:p-6">
-      {/* Dynamic Background Elements */}
+    <div className="min-h-screen w-full flex items-center justify-center bg-natural-bg dark:bg-natural-bg-dark relative overflow-hidden p-4 sm:p-6 transition-colors duration-300">
+      {/* Soft Background Accents */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-600/20 blur-[120px] animate-pulse" />
-        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-purple-600/20 blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(120,80,255,0.05)_0%,transparent_70%)]" />
+        <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-natural-sage/10 blur-[120px] animate-pulse" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-natural-clay/10 blur-[120px] animate-pulse" style={{ animationDelay: '2s' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(circle_at_center,rgba(141,160,138,0.05)_0%,transparent_70%)]" />
       </div>
 
       <motion.div 
-        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.5, ease: "easeOut" }}
-        className="bg-white/10 backdrop-blur-2xl w-full max-w-sm rounded-[2rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] p-5 md:p-6 border border-white/20 relative z-10 overflow-visible mx-auto my-2"
+        className="bg-natural-paper dark:bg-natural-paper-dark w-full max-w-sm rounded-[2rem] shadow-natural p-5 md:p-6 border border-natural-border dark:border-natural-border-dark relative z-10 mx-auto"
       >
         <div className="flex flex-col items-center text-center">
-          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-xl flex items-center justify-center mb-3 shadow-lg shadow-indigo-500/20 rotate-3 hover:rotate-0 transition-transform duration-300">
+          <div className="w-10 h-10 bg-natural-ink dark:bg-indigo-600 rounded-2xl flex items-center justify-center mb-2 shadow-natural rotate-3 hover:rotate-0 transition-all duration-300">
             <Sparkles className="w-5 h-5 text-white" />
           </div>
           
-          <h2 className="text-xl font-extrabold text-white mb-1 tracking-tight">
+          <h2 className="text-xl font-serif font-bold text-natural-ink dark:text-natural-ink-dark mb-0.5 tracking-tight">
             {isLogin ? "Welcome Back" : "Get Started"}
           </h2>
-          <p className="text-white/60 text-[10px] font-medium mb-4 max-w-[240px] leading-relaxed">
+          <p className="text-natural-ink-light dark:text-natural-ink-light-dark text-[10px] font-medium mb-4 max-w-[240px] leading-relaxed">
             {isLogin 
               ? "Your lesson-planning superpowers await." 
               : "Empower your teaching with AI-crafted plans."}
@@ -247,10 +247,10 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-3 p-2 bg-red-500/10 backdrop-blur-md border border-red-500/30 rounded-lg flex items-start gap-2 text-red-200 text-[10px]"
+            className="mb-2 p-2.5 bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-xl flex items-start gap-2 text-red-600 dark:text-red-400 text-xs"
           >
-            <AlertCircle className="w-3 h-3 shrink-0 mt-0.5" />
-            <p className="font-medium">{authError}</p>
+            <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <p className="font-medium text-[10px]">{authError}</p>
           </motion.div>
         )}
 
@@ -258,32 +258,32 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
           <motion.div 
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mb-3 p-2 bg-indigo-500/10 backdrop-blur-md border border-indigo-500/30 rounded-lg flex items-start gap-2 text-indigo-200 text-[10px]"
+            className="mb-2 p-2.5 bg-natural-sage/10 border border-natural-sage/30 rounded-xl flex items-start gap-2 text-natural-sage text-xs"
           >
-            <Sparkles className="w-3 h-3 shrink-0 mt-0.5" />
-            <p className="font-medium">Password reset email sent! Please check your inbox.</p>
+            <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <p className="font-medium text-[10px]">Password reset email sent! Please check your inbox.</p>
           </motion.div>
         )}
 
-        <form onSubmit={handleEmailAuth} className="space-y-2.5 mb-4">
+        <form onSubmit={handleEmailAuth} className="space-y-2 mb-3">
           {!isLogin && (
             <div className="relative group">
-              <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none text-white/40 group-focus-within:text-indigo-400 transition-colors">
+              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-natural-ink-light group-focus-within:text-natural-sage transition-colors">
                 <FileText className="w-3.5 h-3.5" />
               </div>
               <input
                 type="text"
-                placeholder="Your Full Name"
+                placeholder="Full Name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg pl-10 pr-3 py-2.5 focus:border-indigo-500/50 focus:bg-white/10 focus:outline-none text-white transition-all placeholder:text-white/30 text-[11px]"
+                className="w-full bg-natural-bg dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark rounded-xl pl-11 pr-4 py-2.5 focus:border-natural-sage focus:ring-1 focus:ring-natural-sage/20 focus:outline-none text-natural-ink dark:text-natural-ink-dark transition-all placeholder:text-natural-ink-light/50 text-xs"
                 required={!isLogin}
               />
             </div>
           )}
           
           <div className="relative group">
-            <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none text-white/40 group-focus-within:text-indigo-400 transition-colors">
+            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-natural-ink-light group-focus-within:text-natural-sage transition-colors">
               <Mail className="w-3.5 h-3.5" />
             </div>
             <input
@@ -291,14 +291,14 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
               placeholder="Email Address"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full bg-white/5 border border-white/10 rounded-lg pl-10 pr-3 py-2.5 focus:border-indigo-500/50 focus:bg-white/10 focus:outline-none text-white transition-all placeholder:text-white/30 text-[11px]"
+              className="w-full bg-natural-bg dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark rounded-xl pl-11 pr-4 py-2.5 focus:border-natural-sage focus:ring-1 focus:ring-natural-sage/20 focus:outline-none text-natural-ink dark:text-natural-ink-dark transition-all placeholder:text-natural-ink-light/50 text-xs"
               required
             />
           </div>
 
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <div className="relative group">
-              <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none text-white/40 group-focus-within:text-indigo-400 transition-colors">
+              <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none text-natural-ink-light group-focus-within:text-natural-sage transition-colors">
                 <Lock className="w-3.5 h-3.5" />
               </div>
               <input
@@ -306,19 +306,19 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-white/5 border border-white/10 rounded-lg pl-10 pr-3 py-2.5 focus:border-indigo-500/50 focus:bg-white/10 focus:outline-none text-white transition-all placeholder:text-white/30 text-[11px]"
+                className="w-full bg-natural-bg dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark rounded-xl pl-11 pr-4 py-2.5 focus:border-natural-sage focus:ring-1 focus:ring-natural-sage/20 focus:outline-none text-natural-ink dark:text-natural-ink-dark transition-all placeholder:text-natural-ink-light/50 text-xs"
                 required
               />
             </div>
             <div className="flex justify-between items-center px-1">
               {!isLogin ? (
-                <p className="text-[8px] text-white/40 leading-relaxed font-medium">
-                  8+ chars with A-z, 0-9.
+                <p className="text-[9px] text-natural-ink-light leading-relaxed font-medium">
+                  8+ chars with A-Z, a-z, 0-9.
                 </p>
               ) : (
                 <button 
                   type="button" 
-                  className="text-[9px] text-indigo-400 font-semibold hover:text-indigo-300 transition-colors ml-auto"
+                  className="text-[10px] text-natural-sage font-bold hover:text-natural-clay transition-colors ml-auto"
                   onClick={handleResetPassword}
                   disabled={authLoading}
                 >
@@ -328,18 +328,18 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
             </div>
           </div>
 
-          <div className="flex justify-center py-0.5 min-h-[60px]">
+          <div className="flex justify-center py-0.5 min-h-[50px]">
             {recaptchaSiteKey ? (
-              <div className="scale-[0.65] origin-center">
+              <div className="scale-[0.65] origin-center -my-3">
                 <ReCAPTCHA
                   sitekey={recaptchaSiteKey}
                   onChange={(token) => setRecaptchaToken(token)}
-                  theme="dark"
+                  theme={isDarkMode ? "dark" : "light"}
                 />
               </div>
             ) : (
-              <div className="text-[8px] text-indigo-300 italic text-center max-w-[180px]">
-                reCAPTCHA Site Key not configured.
+              <div className="text-[9px] text-natural-ink-light italic text-center max-w-[200px]">
+                reCAPTCHA verification enabled.
               </div>
             )}
           </div>
@@ -347,15 +347,15 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
           <button
             type="submit"
             disabled={authLoading}
-            className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-3 rounded-lg shadow-xl shadow-indigo-600/20 hover:shadow-indigo-600/40 hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2 group"
+            className="w-full bg-natural-ink dark:bg-indigo-600 hover:opacity-90 text-white font-bold py-3 rounded-xl shadow-lg hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-50 disabled:scale-100 flex items-center justify-center gap-2 group"
           >
             {authLoading ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
             ) : (
               <>
-                {isLogin ? <LogIn className="w-3 h-3" /> : <UserPlus className="w-3 h-3" />}
-                <span className="text-xs">{isLogin ? "Sign In" : "Create Account"}</span>
-                <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                {isLogin ? <LogIn className="w-3.5 h-3.5" /> : <UserPlus className="w-3.5 h-3.5" />}
+                <span className="text-xs font-bold">{isLogin ? "Sign In" : "Create Account"}</span>
+                <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
               </>
             )}
           </button>
@@ -363,10 +363,10 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
 
         <div className="relative mb-3">
           <div className="absolute inset-0 flex items-center">
-            <div className="w-full border-t border-white/10"></div>
+            <div className="w-full border-t border-natural-border dark:border-natural-border-dark"></div>
           </div>
           <div className="relative flex justify-center text-[8px] uppercase font-bold tracking-[0.2em]">
-            <span className="bg-[#0a0510]/30 px-2 text-white/30 backdrop-blur-xl">Or continue with</span>
+            <span className="bg-natural-paper dark:bg-natural-paper-dark px-3 text-natural-ink-light">Or continue with</span>
           </div>
         </div>
 
@@ -374,17 +374,17 @@ const Auth = ({ onAuthSuccess }: { onAuthSuccess: () => void }) => {
           onClick={handleGoogleLogin}
           type="button"
           disabled={authLoading}
-          className="w-full bg-white text-gray-900 font-bold py-2.5 rounded-lg shadow-sm hover:shadow-xl hover:bg-gray-50 transition-all flex items-center justify-center gap-2 mb-3"
+          className="w-full bg-natural-bg dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark text-natural-ink dark:text-natural-ink-dark font-bold py-3 rounded-xl shadow-sm hover:shadow-md hover:bg-natural-paper dark:hover:bg-natural-paper-dark transition-all flex items-center justify-center gap-2.5 mb-3 group"
         >
-          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-3.5 h-3.5" alt="Google" />
-          <span className="text-[11px]">Google Account</span>
+          <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4 group-hover:scale-110 transition-transform" alt="Google" />
+          <span className="text-xs">Google Account</span>
         </button>
 
-        <p className="text-center text-[10px] text-white/50 font-medium tracking-wide">
+        <p className="text-center text-[10px] text-natural-ink-light font-medium tracking-wide">
           {isLogin ? "New to Lesson Plan Pro?" : "Already a member?"}{" "}
           <button
             onClick={() => setIsLogin(!isLogin)}
-            className="text-white font-bold hover:text-indigo-400 transition-colors ml-1 decoration-indigo-400/30 underline underline-offset-2"
+            className="text-natural-ink dark:text-natural-ink-dark font-bold hover:text-natural-sage transition-colors ml-1 underline underline-offset-4 decoration-natural-sage/30"
           >
             {isLogin ? "Sign Up Free" : "Login Now"}
           </button>
@@ -1630,7 +1630,7 @@ ${lectureScript.summary}
   }
 
   if (!user) {
-    return <Auth onAuthSuccess={() => {}} />;
+    return <Auth onAuthSuccess={() => {}} isDarkMode={isDarkMode} />;
   }
 
   return (
@@ -1642,8 +1642,8 @@ ${lectureScript.summary}
             <GraduationCap className="text-white w-7 h-7 sm:w-9 sm:h-9" />
           </div>
           <div>
-            <h1 className="font-serif text-natural-ink dark:text-natural-ink-dark text-2xl sm:text-4xl italic font-bold tracking-tight leading-tight">Weekly Lesson Plan Pro</h1>
-            <p className="text-natural-ink-light dark:text-natural-ink-light-dark text-[10px] sm:text-sm font-medium uppercase tracking-[0.1em] mt-1 sm:mt-2">FF Academics Edition</p>
+            <h1 className="font-serif text-natural-ink dark:text-natural-ink-dark text-xl sm:text-2xl font-bold tracking-tight leading-tight">Weekly Lesson Plan Pro</h1>
+            <p className="text-natural-ink-light dark:text-natural-ink-light-dark text-[9px] sm:text-[11px] font-bold uppercase tracking-[0.2em] mt-1">FF Academics Edition</p>
           </div>
         </div>
         
