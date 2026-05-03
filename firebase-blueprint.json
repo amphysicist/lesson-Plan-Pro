@@ -10,6 +10,20 @@
         "isAdmin": { "type": "boolean", "default": false }
       },
       "required": ["email", "isAdmin"]
+    },
+    "Feedback": {
+      "title": "User Feedback",
+      "description": "Stores user feedback, bug reports, and suggestions.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userEmail": { "type": "string", "format": "email" },
+        "feedbackType": { "type": "string", "enum": ["bug", "suggestion", "other"] },
+        "message": { "type": "string" },
+        "planSnapshot": { "type": "object", "description": "Optional snapshot of the plan being commented on" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["feedbackType", "message", "createdAt"]
     }
   },
   "database": {
@@ -23,6 +37,10 @@
       },
       "/archivedPlans/{planId}": {
         "description": "Private archived lesson plans for users."
+      },
+      "/feedback/{feedbackId}": {
+        "schema": "Feedback",
+        "description": "User feedback and issue reports."
       }
     }
   }

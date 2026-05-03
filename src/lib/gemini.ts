@@ -6,19 +6,31 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { WeeklyLessonPlan, LessonPlanForm, SUBJECTS, CLASSES, LectureScript, PeriodPlan } from "../types";
 
+// Constants
+const MAX_CHAR_LIMIT = 150000; // Adjusted for safer token overhead
+const DEFAULT_MODEL = "gemini-3-flash-preview"; 
+
+function truncateString(str: string): string {
+  if (str && str.length > MAX_CHAR_LIMIT) {
+    return str.substring(0, MAX_CHAR_LIMIT) + "... [Content Truncated for AI Summary]";
+  }
+  return str || "";
+}
+
 async function getAI(userApiKey?: string, backupKeys: string[] = []) {
   // Collect all potential keys
   const keys: string[] = [];
   
-  // Enforce: User must have their own key to get the "benefit" of backup/system keys
   if (userApiKey) {
     keys.push(userApiKey);
-    
-    // Add environment variables if any
-    const envKey = (typeof process !== "undefined" ? (process.env.GEMINI_API_KEY || "") : "") || import.meta.env.VITE_GEMINI_API_KEY;
-    if (envKey) keys.push(envKey);
-    
-    // Add backup keys (admin provided etc)
+  }
+
+  // Add environment variables if any
+  const envKey = (typeof process !== "undefined" ? (process.env.GEMINI_API_KEY || "") : "") || import.meta.env.VITE_GEMINI_API_KEY;
+  if (envKey) keys.push(envKey);
+  
+  // Add backup keys (user provided in the rotate list)
+  if (backupKeys && backupKeys.length > 0) {
     keys.push(...backupKeys);
   }
   
@@ -26,7 +38,7 @@ async function getAI(userApiKey?: string, backupKeys: string[] = []) {
   const uniqueKeys = Array.from(new Set(keys.filter(k => !!k)));
 
   if (uniqueKeys.length === 0) {
-    throw new Error("API Key Required: Please add your own Gemini API key in Settings first to enable generation.");
+    throw new Error("API Key Required: Please add your Gemini API key in Settings first to enable generation.");
   }
   
   return uniqueKeys;
@@ -40,29 +52,32 @@ async function withRetry<T>(
   const keys = await getAI(userApiKey, backupKeys);
   let lastError: any = null;
 
-  for (const key of keys) {
+  for (let i = 0; i < keys.length; i++) {
+    const key = keys[i];
     try {
       const genAI = new GoogleGenAI({ apiKey: key });
-      return await action(genAI);
+      
+      // Add a manual timeout wrap for the action
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error("Gemini API call timed out after 55 seconds.")), 55000)
+      );
+      
+      return await Promise.race([action(genAI), timeoutPromise]) as T;
     } catch (error: any) {
       lastError = error;
-      const errorMessage = error?.message || "";
-      // If it's a quota error (429), try the next key
-      if (errorMessage.includes("429") || errorMessage.toLowerCase().includes("quota") || errorMessage.toLowerCase().includes("limit")) {
-        console.warn(`API key limit reached, trying next key...`);
+      const errorMessage = String(error?.message || "").toLowerCase();
+      console.error(`Gemini API Error with key index ${i}:`, error);
+
+      // If it's a timeout or a serious error, we might want to try the next key
+      if (i < keys.length - 1) {
+        console.warn(`Key ${i} failed. Error: ${errorMessage}. Trying next rotating key...`);
         continue;
       }
-      // If it's a fatal error (invalid key etc.), maybe try next too?
-      if (errorMessage.includes("403") || errorMessage.toLowerCase().includes("invalid")) {
-        console.warn(`Invalid API key detected, trying next key...`);
-        continue;
-      }
-      // For other errors, throw immediately
       throw error;
     }
   }
 
-  throw lastError || new Error("All API keys failed or were exhausted.");
+  throw lastError || new Error("All provided API keys failed or were exhausted.");
 }
 
 export async function generateLessonPlan(
@@ -76,61 +91,31 @@ export async function generateLessonPlan(
   backupKeys: string[] = []
 ): Promise<WeeklyLessonPlan> {
   return withRetry(async (ai) => {
-    // Complexity & Tone Guidance based on class
-    let pedagogicalGuidance = "";
-    const classNum = parseInt(className);
-    const isLowerGrade = !isNaN(classNum) && classNum <= 5;
-    const isHigherGrade = !isNaN(classNum) && classNum >= 9 || className.includes("11th") || className.includes("12th");
+    const safeContent = truncateString(content);
 
-    if (isLowerGrade) {
-      pedagogicalGuidance = `
-      TONE & COMPLEXITY (Lower Grades - ${className}):
-      - Use simple, storytelling language. 
-      - Use relatable analogies (e.g., for Computer Science, compare a computer to a human brain or a magic box).
-      - Focus on engagement, basic facts, and hands-on activities. 
-      - Avoid jargon; explain terms simply (e.g., use 'a computer that can do many jobs' instead of 'universal machines').`;
-    } else if (isHigherGrade) {
-      pedagogicalGuidance = `
-      TONE & COMPLEXITY (Higher Grades - ${className}):
-      - Use formal, technical academic language.
-      - Focus on technical depth, critical thinking, and formal exam objectives (e.g., relevant for Boards).
-      - SLOs should be sophisticated and map to higher-order Blooms Taxonomy.`;
-    } else {
-      pedagogicalGuidance = `
-      TONE & COMPLEXITY (Middle Grades - ${className}):
-      - Balance relatable examples with introducing formal terminology.
-      - Focus on conceptual understanding and application.`;
-    }
+    const prompt = `Generate exactly ${numPeriods} periods for the following:
+      Subject: ${subject}
+      Class: ${className}
+      Chapter: ${chapter}
+      Topics: ${topics}
+      Textbook Context: ${safeContent}`;
 
-    const prompt = `You are an expert academic coordinator and teacher trainer. Your task is to generate a highly detailed, humanized Weekly Lesson Plan following the FF Academics format.
-Write in a natural, engaging way as if a passionate and experienced teacher is writing their personal lesson notes. Avoid overly formal or robotic phrasing; instead, use descriptive and practical language that reflects real-world classroom delivery.
-
-Subject: ${subject}
-Class: ${className}
-Chapter: ${chapter}
-Topics: ${topics}
-Number of Periods: ${numPeriods}
-Textbook Context: ${content}
-
-${pedagogicalGuidance}
-
-Please generate exactly ${numPeriods} periods. 
-
-CRITICAL FORMATTING INSTRUCTION:
-All information for each period MUST be presented as short, concise bullet points. Avoid long paragraphs. Use "•" symbol for bullets. Each bullet point should be on a NEW LINE. Each bullet point should be a single, clear thought. IMPORTANT: Provide a MAXIMUM of 2 bullet points for each section (SLO, Explanation, Assessment, Classwork/Homework).
-
-Each period must have:
-1. SLO: Concise bullet points. Clear, measurable, starting with an action verb (Blooms Taxonomy). Adjust complexity for ${className}.
-2. Explanation: Concise bullet points of teaching activities including specific Graphic Organizers to be used (e.g., Venn Diagram, Concept Map, KWL Chart). Use analogies for younger children if applicable.
-3. Assessment: Concise bullet points of specific questions or quick activities (Adopted to assess learning).
-4. Class work/ Homework: Concise bullet points of clear tasks.
-
-Ensure the progression is logical and fits the curriculum standards of the Pakistani education system.`;
+    const systemInstruction = `You are an expert academic coordinator. Generate a concise Weekly Lesson Plan.
+      FORMAT: Return JSON only.
+      
+      For each period, provide:
+      1. slo: Student Learning Objectives (max 2 short bullets)
+      2. explanation: Activities & Graphic Organizer (max 2 short bullets)
+      3. assessment: Questions to assess learning (max 2 short bullets)
+      4. classworkAndHomework: Homework assignments (max 2 short bullets)
+      
+      Tone should be appropriate for ${className}. Progress logically. Use "•" for bullets. Each bullet on a new line.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview", // Specified in skills/system_skills/gemini_api/SKILL.md
+      model: DEFAULT_MODEL, 
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
+        systemInstruction,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -140,10 +125,10 @@ Ensure the progression is logical and fits the curriculum standards of the Pakis
               items: {
                 type: Type.OBJECT,
                 properties: {
-                  slo: { type: Type.STRING, description: "Student Learning Objective" },
-                  explanation: { type: Type.STRING, description: "Main activities and name of the Graphic Organizer to be used" },
-                  assessment: { type: Type.STRING, description: "Activities/questions Adopted to assess learning" },
-                  classworkAndHomework: { type: Type.STRING, description: "Class work/ Homework assignments" }
+                  slo: { type: Type.STRING },
+                  explanation: { type: Type.STRING },
+                  assessment: { type: Type.STRING },
+                  classworkAndHomework: { type: Type.STRING }
                 },
                 required: ["slo", "explanation", "assessment", "classworkAndHomework"]
               }
@@ -155,13 +140,18 @@ Ensure the progression is logical and fits the curriculum standards of the Pakis
     });
 
     const responseText = response.text;
-    if (!responseText) throw new Error("No response from AI");
+    if (!responseText) throw new Error("Empty response from AI");
     
     try {
-      return JSON.parse(responseText.trim()) as WeeklyLessonPlan;
+      const parsed = JSON.parse(responseText.trim());
+      // Validate schema manually if it's missing periods
+      if (!parsed.periods || !Array.isArray(parsed.periods)) {
+        throw new Error("Invalid structure: missing periods array");
+      }
+      return parsed as WeeklyLessonPlan;
     } catch (e) {
-      console.error("Failed to parse Gemini response:", responseText);
-      throw new Error("Invalid response format from AI");
+      console.error("JSON Parse Error:", responseText);
+      throw new Error("The AI failed to format the plan correctly. Please try again.");
     }
   }, userApiKey, backupKeys);
 }
@@ -195,7 +185,7 @@ export async function generateLectureScript(
     Write in a professional yet engaging tone, suitable for classroom delivery.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: DEFAULT_MODEL,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         responseMimeType: "application/json",
@@ -243,7 +233,7 @@ export async function searchResources(query: string, userApiKey?: string, backup
     DO NOT wrap the JSON in markdown code blocks.`;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview", 
+      model: DEFAULT_MODEL, 
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         tools: [{ googleSearch: {} }],
@@ -300,14 +290,14 @@ If a field is not found, leave it empty.`;
           } 
         });
       } else {
-        parts.push({ text: `[Document Section]: ${content}` });
+        parts.push({ text: `[Document Section]: ${truncateString(content)}` });
       }
     }
     
     parts.push({ text: prompt });
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: DEFAULT_MODEL,
       contents: [{ role: "user", parts }],
       config: {
         responseMimeType: "application/json",
@@ -332,6 +322,78 @@ If a field is not found, leave it empty.`;
     } catch (e) {
       return {};
     }
+  }, userApiKey, backupKeys);
+}
+export async function getSearchSuggestions(
+  subject: string,
+  className: string,
+  chapter: string,
+  topics: string,
+  userApiKey?: string,
+  backupKeys: string[] = []
+): Promise<string[]> {
+  return withRetry(async (ai) => {
+    const prompt = `Based on the following lesson plan details, suggest 3-5 specific, effective search queries for a teacher to find high-quality educational resources (videos, worksheets, interactive simulations, or articles).
+    
+    Subject: ${subject}
+    Class: ${className}
+    Chapter: ${chapter}
+    Topics: ${topics}
+    
+    Return ONLY a JSON array of strings.`;
+
+    const response = await ai.models.generateContent({
+      model: DEFAULT_MODEL,
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING }
+        }
+      }
+    });
+
+    const text = response.text;
+    if (!text) return [];
+    try {
+      return JSON.parse(text.trim());
+    } catch (e) {
+      return [];
+    }
+  }, userApiKey, backupKeys);
+}
+
+export async function chatWithAssistant(
+  messages: { role: 'user' | 'model'; parts: { text: string }[] }[],
+  userApiKey?: string,
+  backupKeys: string[] = []
+): Promise<string> {
+  return withRetry(async (ai) => {
+    const systemInstruction = `[SYSTEM INSTRUCTION: You are a dedicated AI Teaching Assistant for "Weekly Lesson Plan Pro". 
+    Help teachers with Lesson Planning, Application Guidance, and Pedagogical Advice.
+    Be professional, concise, and helpful. Always verify AI-generated content.
+    App features: generate plans from textbook content, customize periods, download PDF/Word, Lecture Script feature.]\n\n`;
+
+    // Prepend system instruction to the first user message if it's the start
+    // or just prepend to the very last message to ensure it's always followed
+    const lastIdx = messages.length - 1;
+    const chatHistory = [...messages];
+    if (chatHistory[lastIdx].role === 'user') {
+      chatHistory[lastIdx] = {
+        ...chatHistory[lastIdx],
+        parts: [{ text: systemInstruction + chatHistory[lastIdx].parts[0].text }]
+      };
+    }
+
+    const response = await ai.models.generateContent({
+      model: DEFAULT_MODEL,
+      contents: chatHistory
+    });
+
+    const responseText = response.text;
+    if (!responseText) throw new Error("No response from AI");
+    return responseText;
   }, userApiKey, backupKeys);
 }
 

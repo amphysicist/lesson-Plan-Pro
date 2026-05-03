@@ -59,17 +59,24 @@ import {
   Search,
   Video,
   Mail,
+  Send,
   UserPlus,
   LogIn,
   LogOut,
   BookOpen as BookOpenIcon,
   AlertCircle as AlertCircleIcon,
   LayoutDashboard,
+  LayoutGrid,
+  Folder,
   Settings,
   Eye,
   EyeOff,
   ShieldAlert,
-  ShieldCheck
+  ShieldCheck,
+  MessageSquare,
+  ThumbsUp,
+  ThumbsDown,
+  Flag
 } from "lucide-react";
 import { 
   SUBJECTS, 
@@ -82,7 +89,7 @@ import {
   SourceType,
   UserConfig
 } from "./types";
-import { generateLessonPlan, extractPlanInfo, generateLectureScript, searchResources } from "./lib/gemini";
+import { generateLessonPlan, extractPlanInfo, generateLectureScript, searchResources, getSearchSuggestions, chatWithAssistant } from "./lib/gemini";
 import { 
   sharePlan, 
   getSharedPlan, 
@@ -91,6 +98,7 @@ import {
   archivePlan, 
   getArchivedPlans, 
   deleteArchivedPlan, 
+  submitFeedback,
   SharedPlan, 
   firebaseConfig,
   signInWithEmailAndPassword,
@@ -230,7 +238,12 @@ const Auth = ({ onAuthSuccess, isDarkMode }: { onAuthSuccess: () => void; isDark
       >
         <div className="flex flex-col items-center text-center">
           <div className="w-10 h-10 bg-natural-ink dark:bg-indigo-600 rounded-2xl flex items-center justify-center mb-2 shadow-natural rotate-3 hover:rotate-0 transition-all duration-300">
-            <Sparkles className="w-5 h-5 text-white" />
+            <motion.div
+              animate={{ rotate: [0, 10, -10, 0], scale: [1, 1.1, 1] }}
+              transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+            >
+              <Sparkles className="w-5 h-5 text-white" />
+            </motion.div>
           </div>
           
           <h2 className="text-xl font-serif font-bold text-natural-ink dark:text-natural-ink-dark mb-0.5 tracking-tight">
@@ -439,24 +452,24 @@ export default function App() {
   const [adminError, setAdminError] = useState<string | null>(null);
   const [globalBackupKeys, setGlobalBackupKeys] = useState<string[]>([]);
 
-  const allBackupKeys = (userConfig?.geminiApiKey || userConfig?.isAdmin) 
-    ? Array.from(new Set([
-        ...(userConfig?.apiKeys || []),
-        ...globalBackupKeys
-      ])).filter(k => k && k !== userConfig?.geminiApiKey)
-    : [];
+  const allBackupKeys = Array.from(new Set([
+    ...(userConfig?.apiKeys || []),
+    ...globalBackupKeys
+  ])).filter(k => k && k !== userConfig?.geminiApiKey);
 
   // Initialize PDF.js worker safely
   useEffect(() => {
     try {
-      // Small protection against libraries trying to override read-only fetch
-      const currentFetch = window.fetch;
+      // Early protection against fetch property errors in modules
+      const originalFetch = window.fetch;
       try {
-        (window as any).fetch = currentFetch;
+        Object.defineProperty(window, 'fetch', {
+          get: () => originalFetch,
+          set: () => {},
+          configurable: true
+        });
       } catch (e) {
-        // fetch is read-only, which is fine, we just want to avoid 
-        // libraries crashing when they try to polyfill it.
-        console.debug("Note: window.fetch is read-only in this environment.");
+        // Silently ignore if already non-configurable
       }
 
       pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -483,6 +496,8 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{ title: string; snippet: string; link: string; selected?: boolean }[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([]);
+  const [isSuggestingQueries, setIsSuggestingQueries] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('theme');
@@ -490,6 +505,69 @@ export default function App() {
     }
     return false;
   });
+
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [feedbackBody, setFeedbackBody] = useState("");
+  const [feedbackType, setFeedbackType] = useState<'bug' | 'suggestion' | 'other'>('suggestion');
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
+  
+  // Chat Assistant State
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatInputText, setChatInputText] = useState("");
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'model'; parts: { text: string }[] }[]>([
+    { 
+      role: 'model', 
+      parts: [{ text: "Hello! I'm your AI Teaching Assistant. I can help you with lesson planning ideas, pedagogical advice, or guide you through using this application. How can I help you today?" }] 
+    }
+  ]);
+  const [isChatLoading, setIsChatLoading] = useState(false);
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  const DockNavItem = ({ 
+    icon: Icon, 
+    label, 
+    isActive, 
+    onClick, 
+    activeColor = "bg-blue-600" 
+  }: { 
+    icon: any, 
+    label: string, 
+    isActive: boolean, 
+    onClick: () => void, 
+    activeColor?: string 
+  }) => (
+    <motion.button
+      layout
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+      onClick={onClick}
+      className={`flex items-center gap-2 px-4 py-2 rounded-2xl transition-all duration-300 relative group shrink-0 ${
+        isActive 
+          ? `${activeColor} text-white shadow-lg` 
+          : "text-natural-ink-light dark:text-natural-ink-light-dark hover:bg-natural-sage/10"
+      }`}
+    >
+      <Icon className={`w-5 h-5 ${isActive ? "" : "group-hover:scale-110 transition-transform"}`} />
+      <AnimatePresence mode="popLayout" initial={false}>
+        {isActive && (
+          <motion.span
+            initial={{ opacity: 0, width: 0, x: -10 }}
+            animate={{ opacity: 1, width: "auto", x: 0 }}
+            exit={{ opacity: 0, width: 0, x: -10 }}
+            className="font-bold text-sm overflow-hidden whitespace-nowrap"
+          >
+            {label}
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </motion.button>
+  );
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [chatMessages]);
 
   useEffect(() => {
     if (isDarkMode) {
@@ -588,8 +666,9 @@ export default function App() {
             }
             setUserConfig(activeConfig);
 
-            // AUTO-REDIRECT: If no API key and we are not already in settings/admin, redirect to settings
-            if (!activeConfig.geminiApiKey && currentSubView === 'editor') {
+            // AUTO-REDIRECT: If no API keys at all and we are not already in settings/admin, redirect to settings
+            const hasBackupKeys = config.apiKeys && config.apiKeys.length > 0;
+            if (!activeConfig.geminiApiKey && !hasBackupKeys && currentSubView === 'editor') {
               setCurrentSubView('settings');
             }
           } else {
@@ -677,8 +756,8 @@ export default function App() {
       }
     }
 
-    if (!userConfig?.geminiApiKey) {
-      setError("Please add your Gemini API Key in Settings to generate lesson plans.");
+    if (!userConfig?.geminiApiKey && allBackupKeys.length === 0) {
+      setError("Please add at least one Gemini API Key in Settings to generate lesson plans.");
       setCurrentSubView('settings');
       return;
     }
@@ -864,7 +943,7 @@ export default function App() {
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
-    if (!userConfig?.geminiApiKey) {
+    if (!userConfig?.geminiApiKey && allBackupKeys.length === 0) {
       setError("Please add your Gemini API Key in Settings to use search.");
       setCurrentSubView('settings');
       return;
@@ -878,6 +957,36 @@ export default function App() {
       setError("Search failed. Please try again.");
     } finally {
       setIsSearching(false);
+    }
+  };
+
+  const handleSuggestQueries = async () => {
+    if (!form.subject || !form.className || !form.chapter) {
+      setError("Please fill in basic lesson details to get AI search suggestions.");
+      return;
+    }
+    
+    if (!userConfig?.geminiApiKey && allBackupKeys.length === 0) {
+      setError("Please add your Gemini API Key in Settings to get suggestions.");
+      setCurrentSubView('settings');
+      return;
+    }
+
+    setIsSuggestingQueries(true);
+    try {
+      const suggestions = await getSearchSuggestions(
+        form.subject,
+        form.className,
+        form.chapter,
+        form.topics,
+        userConfig?.geminiApiKey,
+        allBackupKeys
+      );
+      setSearchSuggestions(suggestions);
+    } catch (err) {
+      console.error("Failed to get suggestions:", err);
+    } finally {
+      setIsSuggestingQueries(false);
     }
   };
 
@@ -915,7 +1024,7 @@ export default function App() {
       return;
     }
     
-    if (!userConfig?.geminiApiKey) {
+    if (!userConfig?.geminiApiKey && allBackupKeys.length === 0) {
       setError("Please add your Gemini API Key in Settings to analyze sources.");
       setCurrentSubView('settings');
       return;
@@ -1071,6 +1180,53 @@ export default function App() {
         [side]: !prev[key]?.[side]
       }
     }));
+  };
+
+  const handleFeedbackSubmit = async () => {
+    if (!feedbackBody.trim()) return;
+    setIsSubmittingFeedback(true);
+    try {
+      await submitFeedback({
+        feedbackType,
+        message: feedbackBody,
+        planSnapshot: plan
+      });
+      setSuccess("Thank you for your feedback!");
+      setShowFeedbackModal(false);
+      setFeedbackBody("");
+    } catch (err: any) {
+      setError("Failed to submit feedback. Please try again.");
+      console.error(err);
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
+
+  const handleChatSend = async () => {
+    if (!chatInputText.trim() || isChatLoading) return;
+
+    const userMessage = chatInputText.trim();
+    setChatInputText("");
+    
+    const newMessages = [...chatMessages, { role: 'user' as const, parts: [{ text: userMessage }] }];
+    setChatMessages(newMessages);
+    setIsChatLoading(true);
+
+    try {
+      const response = await chatWithAssistant(
+        newMessages,
+        userConfig?.geminiApiKey,
+        allBackupKeys
+      );
+      
+      setChatMessages(prev => [...prev, { role: 'model' as const, parts: [{ text: response }] }]);
+    } catch (err: any) {
+      const errorMessage = err.message || "I'm having trouble connecting right now. Please check your API key in Settings.";
+      setChatMessages(prev => [...prev, { role: 'model' as const, parts: [{ text: `Error: ${errorMessage}` }] }]);
+      console.error(err);
+    } finally {
+      setIsChatLoading(false);
+    }
   };
 
   const handleExportPDF = async () => {
@@ -1342,7 +1498,7 @@ ${lectureScript.summary}
       return;
     }
 
-    if (!userConfig?.geminiApiKey) {
+    if (!userConfig?.geminiApiKey && allBackupKeys.length === 0) {
       setError("Please add your Gemini API Key in Settings to generate lecture scripts.");
       setCurrentSubView('settings');
       return;
@@ -1647,201 +1803,191 @@ ${lectureScript.summary}
           </div>
         </div>
         
-        <div className="flex flex-wrap items-center justify-center md:justify-end gap-2 sm:gap-4 w-full md:w-auto">
-          {/* User Profile & Sign Out */}
-          <div className="flex items-center gap-3 mr-2 pr-4 border-r border-natural-border dark:border-natural-border-dark">
-            <div className="hidden sm:flex flex-col items-end">
-              <span className="text-xs font-bold text-natural-ink dark:text-natural-ink-dark">
-                {user?.displayName || (user?.email ? user.email.split('@')[0] : 'User')}
-              </span>
-              <span className="text-[10px] text-natural-ink-light dark:text-natural-ink-light-dark">
-                {user?.email}
-              </span>
-            </div>
-            <button 
+        <div className="flex flex-col xl:flex-row items-center justify-center xl:justify-end gap-4 w-full xl:w-auto">
+          {/* Main Navigation Dock */}
+          <div className="flex items-center gap-1.5 bg-white dark:bg-natural-paper-dark border border-natural-border dark:border-natural-border-dark p-1.5 rounded-[24px] shadow-sm transition-colors">
+            <DockNavItem 
+              icon={LayoutGrid} 
+              label="Editor" 
+              isActive={currentSubView === 'editor' && !showArchives && activeView === 'builder'} 
+              onClick={() => { setCurrentSubView('editor'); setShowArchives(false); setActiveView('builder'); }} 
+            />
+            <DockNavItem 
+              icon={Folder} 
+              label="Saved" 
+              isActive={showArchives} 
+              onClick={() => setShowArchives(true)} 
+            />
+            <DockNavItem 
+              icon={MessageSquare} 
+              label="Feedback" 
+              isActive={showFeedbackModal} 
+              onClick={() => setShowFeedbackModal(true)} 
+            />
+            <DockNavItem 
+              icon={Settings} 
+              label="Settings" 
+              isActive={currentSubView === 'settings'} 
+              onClick={() => { setCurrentSubView('settings'); setActiveView('builder'); }} 
+            />
+            <div className="w-px h-6 bg-natural-border dark:bg-natural-border-dark mx-1" />
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
               onClick={() => signOut(auth)}
-              className="p-2 bg-white dark:bg-natural-paper-dark border border-natural-border dark:border-natural-border-dark text-natural-ink-light hover:text-red-500 rounded-lg shadow-sm transition-all group"
+              className="p-2 text-natural-ink-light dark:text-natural-ink-light-dark hover:text-red-500 transition-colors"
               title="Sign Out"
             >
-              <LogOut className="w-4 h-4 group-hover:scale-110 transition-transform" />
-            </button>
+              <LogOut className="w-5 h-5" />
+            </motion.button>
           </div>
 
-          <button 
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className="p-2.5 bg-natural-paper dark:bg-natural-paper-dark border border-natural-border dark:border-natural-border-dark rounded-full text-natural-clay shadow-sm hover:shadow-md transition-all"
-            title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          >
-            {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
-
-          {plan && (
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-4">
+            {/* Global/Context Utilities */}
+            <div className="flex items-center gap-1.5 bg-natural-bg/50 dark:bg-natural-bg-dark/50 border border-natural-border dark:border-natural-border-dark p-1 rounded-2xl">
               <button 
-                onClick={handleShare}
-                disabled={sharing}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-natural-paper-dark border border-natural-border dark:border-natural-border-dark rounded-full font-bold text-natural-ink dark:text-natural-ink-dark text-xs shadow-sm hover:shadow-md transition-all disabled:opacity-50"
-                title="Create a shareable link"
+                onClick={() => setIsDarkMode(!isDarkMode)}
+                className="p-2 text-natural-clay hover:bg-white dark:hover:bg-natural-paper-dark rounded-xl transition-all shadow-sm"
+                title={isDarkMode ? "Light Mode" : "Dark Mode"}
               >
-                <Share2 className={`w-3.5 h-3.5 ${sharing ? 'animate-pulse' : ''}`} />
-                {sharing ? "Sharing..." : "Share"}
+                {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>
-
-              <button 
-                onClick={handleArchive}
-                disabled={archiving}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-natural-paper-dark border border-natural-border dark:border-natural-border-dark rounded-full font-bold text-natural-ink dark:text-natural-ink-dark text-xs shadow-sm hover:shadow-md transition-all disabled:opacity-50"
-                title="Save current plan to your archives"
-              >
-                <Archive className={`w-3.5 h-3.5 ${archiving ? 'animate-pulse' : ''}`} />
-                {archiving ? "Archiving..." : "Save"}
-              </button>
+              
+              {userConfig?.isAdmin && (
+                <button 
+                  onClick={() => { setCurrentSubView('admin'); setActiveView('builder'); }}
+                  className={`p-2 rounded-xl transition-all ${
+                    currentSubView === 'admin' 
+                      ? "bg-indigo-600 text-white shadow-md" 
+                      : "text-indigo-600 hover:bg-white dark:hover:bg-natural-paper-dark"
+                  }`}
+                  title="Admin Dashboard"
+                >
+                  <LayoutDashboard className="w-4 h-4" />
+                </button>
+              )}
             </div>
-          )}
-          
-          <button 
-            onClick={() => setShowArchives(!showArchives)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-natural-sage/10 dark:bg-natural-sage/20 text-natural-sage border border-natural-sage/20 dark:border-natural-sage/30 rounded-full font-bold text-xs hover:bg-natural-sage/20 dark:hover:bg-natural-sage/30 transition-all"
-            title="View your saved plans"
-          >
-            <History className="w-3.5 h-3.5" />
-            {archivedPlans.length > 0 && (
-              <span className="w-4 h-4 bg-natural-sage text-white dark:text-natural-bg-dark text-[9px] rounded-full flex items-center justify-center">
-                {archivedPlans.length}
-              </span>
-            )}
-            Saved
-          </button>
 
-          <button 
-            onClick={() => setIsEditing(!isEditing)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-bold text-xs transition-all shadow-sm ${
-              isEditing 
-                ? "bg-natural-sage text-white dark:text-natural-bg-dark shadow-md" 
-                : "bg-white dark:bg-natural-paper-dark border border-natural-border dark:border-natural-border-dark text-natural-ink-light dark:text-natural-ink-light-dark"
-            }`}
-          >
-            {isEditing ? <LockOpen className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-            {isEditing ? "Unlocked" : "Locked"}
-          </button>
+            {/* Plan Specific Actions */}
+            {plan && (
+              <div className="flex items-center gap-2">
+                <motion.div layout className="flex items-center gap-1.5 p-1 bg-white dark:bg-natural-paper-dark border border-natural-border dark:border-natural-border-dark rounded-2xl shadow-sm">
+                  <button 
+                    onClick={handleNew}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-natural-ink dark:text-natural-ink-dark hover:bg-natural-bg dark:hover:bg-natural-bg-dark rounded-xl font-bold text-[10px] transition-all"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> New
+                  </button>
+                  
+                  <div className="w-px h-4 bg-natural-border dark:bg-natural-border-dark" />
 
-          <button 
-            onClick={() => setCurrentSubView('editor')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-bold text-xs transition-all shadow-sm ${
-              currentSubView === 'editor' 
-                ? "bg-natural-sage text-white dark:text-natural-bg-dark shadow-md" 
-                : "bg-white dark:bg-natural-paper-dark border border-natural-border dark:border-natural-border-dark text-natural-ink-light dark:text-natural-ink-light-dark"
-            }`}
-          >
-            <Pencil className="w-3.5 h-3.5" /> Editor
-          </button>
+                  <button 
+                    onClick={() => setIsEditing(!isEditing)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-bold text-[10px] transition-all ${
+                      isEditing 
+                        ? "bg-natural-sage text-white" 
+                        : "text-natural-ink-light hover:bg-natural-bg dark:hover:bg-natural-bg-dark"
+                    }`}
+                  >
+                    {isEditing ? <LockOpen className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                    {isEditing ? "Unlock" : "Lock"}
+                  </button>
+                </motion.div>
 
-          <button 
-            onClick={handleNew}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-natural-ink dark:bg-natural-ink-dark text-white dark:text-natural-bg-dark rounded-full font-bold text-xs shadow-natural hover:shadow-md transition-all"
-          >
-            <RotateCcw className="w-3.5 h-3.5" /> New Plan
-          </button>
+                <div className="flex items-center gap-1.5">
+                  <button 
+                    onClick={handleShare}
+                    disabled={sharing}
+                    className="p-2.5 bg-white dark:bg-natural-paper-dark border border-natural-border dark:border-natural-border-dark rounded-full text-natural-ink dark:text-natural-ink-dark shadow-sm hover:shadow-md transition-all disabled:opacity-50"
+                    title="Share Plan"
+                  >
+                    <Share2 className={`w-4 h-4 ${sharing ? 'animate-pulse' : ''}`} />
+                  </button>
 
-          <div className="h-6 w-px bg-natural-border dark:bg-natural-border-dark mx-1" />
+                  <button 
+                    onClick={handleArchive}
+                    disabled={archiving}
+                    className="p-2.5 bg-white dark:bg-natural-paper-dark border border-natural-border dark:border-natural-border-dark rounded-full text-natural-ink dark:text-natural-ink-dark shadow-sm hover:shadow-md transition-all disabled:opacity-50"
+                    title="Save Plan"
+                  >
+                    <Archive className={`w-4 h-4 ${archiving ? 'animate-pulse' : ''}`} />
+                  </button>
 
-          {userConfig?.isAdmin && (
-            <button 
-              onClick={() => { setCurrentSubView('admin'); setActiveView('builder'); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-bold text-xs transition-all shadow-sm ${
-                currentSubView === 'admin' 
-                  ? "bg-indigo-600 text-white shadow-md" 
-                  : "bg-white dark:bg-natural-paper-dark border border-natural-border dark:border-natural-border-dark text-indigo-600"
-              }`}
-            >
-              <LayoutDashboard className="w-3.5 h-3.5" /> Admin
-            </button>
-          )}
-
-          <button 
-            onClick={() => { setCurrentSubView('settings'); setActiveView('builder'); }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-bold text-xs transition-all shadow-sm ${
-              currentSubView === 'settings' 
-                ? "bg-natural-sage text-white dark:text-natural-bg-dark shadow-md" 
-                : "bg-white dark:bg-natural-paper-dark border border-natural-border dark:border-natural-border-dark text-natural-ink-light dark:text-natural-ink-light-dark"
-            }`}
-          >
-            <Settings className="w-3.5 h-3.5" /> Settings
-          </button>
-
-          {plan && (
-            <div className="relative">
-              <button 
-                onClick={() => setExportMenuOpen(!exportMenuOpen)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-natural-ink dark:bg-natural-ink-dark text-white dark:text-natural-bg-dark rounded-full font-bold shadow-natural hover:shadow-md transition-all text-xs group"
-              >
-                <Download className="w-3.5 h-3.5 group-hover:animate-bounce" />
-                Export
-                <ChevronDown className={`w-3 h-3 transition-transform duration-300 ${exportMenuOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              <AnimatePresence>
-                {exportMenuOpen && (
-                  <>
-                    <motion.div 
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      onClick={() => setExportMenuOpen(false)}
-                      className="fixed inset-0 z-40"
-                    />
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                      className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-natural-paper-dark rounded-2xl shadow-2xl border border-natural-border dark:border-natural-border-dark p-2 z-50 flex flex-col gap-1 overflow-hidden transition-colors"
+                  <div className="relative">
+                    <button 
+                      onClick={() => setExportMenuOpen(!exportMenuOpen)}
+                      className="flex items-center gap-2 px-4 py-2 bg-natural-ink dark:bg-natural-ink-dark text-white rounded-full font-bold shadow-lg hover:opacity-90 transition-all text-xs"
                     >
-                      <button 
-                        onClick={() => { handleExportPDF(); setExportMenuOpen(false); }}
-                        className="flex items-center gap-3 w-full px-4 py-2 text-left hover:bg-natural-clay/10 rounded-xl transition-colors group"
-                      >
-                        <div className="w-8 h-8 bg-natural-clay/10 rounded-lg flex items-center justify-center text-natural-clay group-hover:bg-natural-clay group-hover:text-white transition-all">
-                          <FileDown className="w-4 h-4" />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-sm text-natural-ink dark:text-natural-ink-dark">Export as PDF</span>
-                          <span className="text-[10px] text-natural-ink-light dark:text-natural-ink-light-dark">Professional printing</span>
-                        </div>
-                      </button>
+                      <Download className="w-4 h-4" />
+                      Export
+                      <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-300 ${exportMenuOpen ? 'rotate-180' : ''}`} />
+                    </button>
 
-                      <button 
-                        onClick={() => { handleExportJPG(); setExportMenuOpen(false); }}
-                        className="flex items-center gap-3 w-full px-4 py-2 text-left hover:bg-natural-sage/10 rounded-xl transition-colors group"
-                      >
-                        <div className="w-8 h-8 bg-natural-sage/10 rounded-lg flex items-center justify-center text-natural-sage group-hover:bg-natural-sage group-hover:text-white transition-all">
-                          <ImageIcon className="w-4 h-4" />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-sm text-natural-ink dark:text-natural-ink-dark">Export as JPG</span>
-                          <span className="text-[10px] text-natural-ink-light dark:text-natural-ink-light-dark">High-quality image</span>
-                        </div>
-                      </button>
+                    <AnimatePresence>
+                      {exportMenuOpen && (
+                        <>
+                          <motion.div 
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setExportMenuOpen(false)}
+                            className="fixed inset-0 z-40"
+                          />
+                          <motion.div 
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-natural-paper-dark rounded-2xl shadow-2xl border border-natural-border dark:border-natural-border-dark p-2 z-50 flex flex-col gap-1 overflow-hidden transition-colors"
+                          >
+                            <button 
+                              onClick={() => { handleExportPDF(); setExportMenuOpen(false); }}
+                              className="flex items-center gap-3 w-full px-4 py-2 text-left hover:bg-natural-clay/10 rounded-xl transition-colors group"
+                            >
+                              <div className="w-8 h-8 bg-natural-clay/10 rounded-lg flex items-center justify-center text-natural-clay group-hover:bg-natural-clay group-hover:text-white transition-all">
+                                <FileDown className="w-4 h-4" />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="font-bold text-sm text-natural-ink dark:text-natural-ink-dark">Export as PDF</span>
+                                <span className="text-[10px] text-natural-ink-light dark:text-natural-ink-light-dark">Professional printing</span>
+                              </div>
+                            </button>
 
-                      <button 
-                        onClick={() => { handleExportWord(); setExportMenuOpen(false); }}
-                        className="flex items-center gap-3 w-full px-4 py-2 text-left hover:bg-natural-ink/5 dark:hover:bg-natural-ink-dark/10 rounded-xl transition-colors group"
-                      >
-                        <div className="w-8 h-8 bg-natural-ink/10 dark:bg-natural-ink-dark/20 rounded-lg flex items-center justify-center text-natural-ink dark:text-natural-ink-dark group-hover:bg-natural-ink dark:group-hover:bg-natural-ink-dark group-hover:text-white dark:group-hover:text-natural-bg-dark transition-all">
-                          <FileWord className="w-4 h-4" />
-                        </div>
-                        <div className="flex flex-col">
-                          <span className="font-bold text-sm text-natural-ink dark:text-natural-ink-dark">Export as Word</span>
-                          <span className="text-[10px] text-natural-ink-light dark:text-natural-ink-light-dark">Editable .doc file</span>
-                        </div>
-                      </button>
-                    </motion.div>
-                  </>
-                )}
-              </AnimatePresence>
-            </div>
-          )}
+                            <button 
+                              onClick={() => { handleExportJPG(); setExportMenuOpen(false); }}
+                              className="flex items-center gap-3 w-full px-4 py-2 text-left hover:bg-natural-sage/10 rounded-xl transition-colors group"
+                            >
+                              <div className="w-8 h-8 bg-natural-sage/10 rounded-lg flex items-center justify-center text-natural-sage group-hover:bg-natural-sage group-hover:text-white transition-all">
+                                <ImageIcon className="w-4 h-4" />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="font-bold text-sm text-natural-ink dark:text-natural-ink-dark">Export as JPG</span>
+                                <span className="text-[10px] text-natural-ink-light dark:text-natural-ink-light-dark">High-quality image</span>
+                              </div>
+                            </button>
+
+                            <button 
+                              onClick={() => { handleExportWord(); setExportMenuOpen(false); }}
+                              className="flex items-center gap-3 w-full px-4 py-2 text-left hover:bg-natural-ink/5 dark:hover:bg-natural-ink-dark/10 rounded-xl transition-colors group"
+                            >
+                              <div className="w-8 h-8 bg-natural-ink/10 dark:bg-natural-ink-dark/20 rounded-lg flex items-center justify-center text-natural-ink dark:text-natural-ink-dark group-hover:bg-natural-ink dark:group-hover:bg-natural-ink-dark group-hover:text-white dark:group-hover:text-natural-bg-dark transition-all">
+                                <FileWord className="w-4 h-4" />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="font-bold text-sm text-natural-ink dark:text-natural-ink-dark">Export as Word</span>
+                                <span className="text-[10px] text-natural-ink-light dark:text-natural-ink-light-dark">Editable .doc file</span>
+                              </div>
+                            </button>
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
-      </header>
+    </header>
 
       <main className="max-w-[1240px] mx-auto px-4 sm:px-6 py-6 sm:py-10">
         {shareUrl && (
@@ -2316,20 +2462,59 @@ ${lectureScript.summary}
 
                           {activeSourceTab === 'search' && (
                             <motion.div key="search" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-6">
-                              <div className="relative">
-                                <input 
-                                  type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                                  placeholder="Search for topic-specific educational resources..."
-                                  className="w-full bg-natural-bg dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark rounded-2xl pl-12 pr-4 py-4 focus:border-natural-sage focus:outline-none text-natural-ink dark:text-natural-ink-dark"
-                                />
-                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-natural-clay w-5 h-5" />
-                                <button 
-                                  onClick={handleSearch} disabled={isSearching}
-                                  className="absolute right-3 top-1/2 -translate-y-1/2 px-6 py-2 bg-natural-ink dark:bg-natural-ink-dark text-white dark:text-natural-bg-dark rounded-xl text-xs font-bold disabled:opacity-50"
-                                >
-                                  {isSearching ? 'Searching...' : 'Search'}
-                                </button>
+                              <div className="space-y-4">
+                                <div className="flex items-center justify-between px-1">
+                                  <p className="text-sm text-natural-ink-light dark:text-natural-ink-light-dark">AI-powered search for high-quality benchmarks and resources.</p>
+                                  {(form.subject || form.chapter) && (
+                                    <button 
+                                      onClick={handleSuggestQueries}
+                                      disabled={isSuggestingQueries}
+                                      className="text-[10px] font-bold text-natural-sage hover:text-natural-clay transition-colors flex items-center gap-1.5 uppercase tracking-widest"
+                                    >
+                                      {isSuggestingQueries ? (
+                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                      ) : (
+                                        <Sparkles className="w-3 h-3" />
+                                      )}
+                                      Suggest Queries
+                                    </button>
+                                  )}
+                                </div>
+
+                                {searchSuggestions.length > 0 && (
+                                  <div className="flex flex-wrap gap-2 px-1">
+                                    {searchSuggestions.map((suggestion, idx) => (
+                                      <button 
+                                        key={idx}
+                                        onClick={() => {
+                                          setSearchQuery(suggestion);
+                                          // Trigger search immediately
+                                          setTimeout(() => handleSearch(), 10);
+                                        }}
+                                        className="px-3 py-1.5 bg-natural-sage/5 dark:bg-natural-sage/20 hover:bg-natural-sage/10 dark:hover:bg-natural-sage/30 text-natural-sage text-[10px] font-bold rounded-lg border border-natural-sage/20 transition-all flex items-center gap-1.5"
+                                      >
+                                        <Search className="w-3 h-3" />
+                                        {suggestion}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+
+                                <div className="relative">
+                                  <input 
+                                    type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                    placeholder="Search for topic-specific educational resources..."
+                                    className="w-full bg-natural-bg dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark rounded-2xl pl-12 pr-4 py-4 focus:border-natural-sage focus:outline-none text-natural-ink dark:text-natural-ink-dark"
+                                  />
+                                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-natural-clay w-5 h-5" />
+                                  <button 
+                                    onClick={handleSearch} disabled={isSearching}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 px-6 py-2 bg-natural-ink dark:bg-natural-ink-dark text-white dark:text-natural-bg-dark rounded-xl text-xs font-bold disabled:opacity-50"
+                                  >
+                                    {isSearching ? 'Searching...' : 'Search'}
+                                  </button>
+                                </div>
                               </div>
 
                               {searchResults.length > 0 && (
@@ -2608,9 +2793,9 @@ ${lectureScript.summary}
                   <table className="w-full text-left border-collapse">
                     <tbody>
                       <tr style={{ height: rowHeights[0] || 'auto' }} className="relative group">
-                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-2 py-1 border-b border-r border-black font-bold w-48">Week(as mentioned in SoS)</th>
+                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-1.5 py-0.5 border-b border-r border-black font-bold w-48">Week(as mentioned in SoS)</th>
                         <td 
-                          className={`px-2 py-1 border-b border-r border-black outline-none hover:bg-yellow-50/10 ${activeCell?.section === 'info' && activeCell.row === 0 && activeCell.col === 0 ? 'lp-cell-active' : ''}`}
+                          className={`px-1.5 py-0.5 border-b border-r border-black outline-none hover:bg-yellow-50/10 ${activeCell?.section === 'info' && activeCell.row === 0 && activeCell.col === 0 ? 'lp-cell-active' : ''}`}
                         >
                           <div 
                             contentEditable={isEditing} 
@@ -2622,9 +2807,9 @@ ${lectureScript.summary}
                             {form.week}
                           </div>
                         </td>
-                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-2 py-1 border-b border-r border-black font-bold w-20">Dates</th>
+                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-1.5 py-0.5 border-b border-r border-black font-bold w-20">Dates</th>
                         <td 
-                          className={`px-2 py-1 border-b border-black outline-none hover:bg-yellow-50/10 relative ${activeCell?.section === 'info' && activeCell.row === 0 && activeCell.col === 1 ? 'lp-cell-active' : ''}`}
+                          className={`px-1.5 py-0.5 border-b border-black outline-none hover:bg-yellow-50/10 relative ${activeCell?.section === 'info' && activeCell.row === 0 && activeCell.col === 1 ? 'lp-cell-active' : ''}`}
                         >
                           <div 
                             contentEditable={isEditing}
@@ -2638,9 +2823,9 @@ ${lectureScript.summary}
                         </td>
                       </tr>
                       <tr style={{ height: rowHeights[1] || 'auto' }} className="relative group">
-                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-2 py-1 border-b border-r border-black font-bold">Class</th>
+                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-1.5 py-0.5 border-b border-r border-black font-bold">Class</th>
                         <td 
-                          className={`px-2 py-1 border-b border-r border-black outline-none hover:bg-yellow-50/10 ${activeCell?.section === 'info' && activeCell.row === 1 && activeCell.col === 0 ? 'lp-cell-active' : ''}`}
+                          className={`px-1.5 py-0.5 border-b border-r border-black outline-none hover:bg-yellow-50/10 ${activeCell?.section === 'info' && activeCell.row === 1 && activeCell.col === 0 ? 'lp-cell-active' : ''}`}
                         >
                           <div 
                             contentEditable={isEditing}
@@ -2652,9 +2837,9 @@ ${lectureScript.summary}
                             {form.className}
                           </div>
                         </td>
-                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-2 py-1 border-b border-r border-black font-bold w-20">Subject</th>
+                        <th className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50 px-1.5 py-0.5 border-b border-r border-black font-bold w-20">Subject</th>
                         <td 
-                          className={`px-2 py-1 border-b border-r border-black outline-none hover:bg-yellow-50/10 ${activeCell?.section === 'info' && activeCell.row === 1 && activeCell.col === 1 ? 'lp-cell-active' : ''}`}
+                          className={`px-1.5 py-0.5 border-b border-r border-black outline-none hover:bg-yellow-50/10 ${activeCell?.section === 'info' && activeCell.row === 1 && activeCell.col === 1 ? 'lp-cell-active' : ''}`}
                         >
                           <div 
                             contentEditable={isEditing}
@@ -2748,7 +2933,7 @@ ${lectureScript.summary}
                     <thead className="bg-[#f3f4f6] dark:bg-natural-bg-dark/50">
                       <tr className="relative">
                         {['SLOs', 'Explanation', 'Assessment', 'Classwork/Homework'].map((h, i) => (
-                          <th key={i} className="border border-black p-1.5 font-bold underline leading-tight relative group">
+                          <th key={i} className="border border-black p-1 font-bold underline leading-tight relative group">
                             {i === 1 ? (
                               <>Explanation<br/><span className="text-[8pt] font-normal no-underline">(Activities & Graphic Organizer)</span></>
                             ) : i === 2 ? (
@@ -2768,7 +2953,7 @@ ${lectureScript.summary}
                       {plan.periods.map((p, pIdx) => (
                         <React.Fragment key={pIdx}>
                           <tr className="group/phead">
-                            <td colSpan={4} className="bg-[#f9fafb] dark:bg-natural-bg-dark/30 border border-black px-3 py-1 font-bold italic relative">
+                            <td colSpan={4} className="bg-[#f9fafb] dark:bg-natural-bg-dark/30 border border-black px-2 py-0.5 font-bold italic relative">
                               <div className="flex items-center justify-between">
                                 <span>Period {pIdx + 1}</span>
                                 {isEditing && (
@@ -2800,7 +2985,7 @@ ${lectureScript.summary}
                                 <td 
                                   key={colIdx}
                                   onFocus={() => setActiveCell({ row: pIdx, col: colIdx, section: 'slo' })}
-                                  className={`border border-black p-2 leading-relaxed whitespace-pre-line break-words hover:bg-yellow-50/10 transition-colors relative
+                                  className={`border border-black p-1.5 leading-snug whitespace-pre-wrap break-words hover:bg-yellow-50/10 transition-colors relative
                                     ${activeCell?.section === 'slo' && activeCell.row === pIdx && activeCell.col === colIdx ? 'lp-cell-active' : ''}
                                     ${isEditing ? 'cursor-text' : ''}
                                   `}
@@ -2820,7 +3005,7 @@ ${lectureScript.summary}
                                   <div
                                     contentEditable={isEditing}
                                     suppressContentEditableWarning
-                                    className="outline-none min-h-[1.5em] w-full rich-text-cell"
+                                    className="outline-none min-h-[1.5em] w-full rich-text-cell whitespace-pre-wrap"
                                     onBlur={(e) => handleCellEdit('slo', pIdx, colIdx, key, e.currentTarget.innerHTML)}
                                     dangerouslySetInnerHTML={{ __html: (p as any)[key] }}
                                   />
@@ -2867,6 +3052,253 @@ ${lectureScript.summary}
           Crafted for Excellence in Education
         </p>
       </footer>
+
+      {/* Feedback Modal */}
+      <AnimatePresence>
+        {showFeedbackModal && (
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowFeedbackModal(false)}
+              className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-natural-paper dark:bg-natural-paper-dark rounded-3xl shadow-2xl border border-natural-border dark:border-natural-border-dark overflow-hidden transition-colors"
+            >
+              <div className="p-6 sm:p-8">
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-natural-clay/10 rounded-xl flex items-center justify-center">
+                      <MessageSquare className="w-6 h-6 text-natural-clay" />
+                    </div>
+                    <div>
+                      <h3 className="text-xl font-serif font-bold text-natural-ink dark:text-natural-ink-dark italic">Feedback</h3>
+                      <p className="text-[10px] uppercase tracking-widest text-natural-ink-light dark:text-natural-ink-light-dark font-bold">Help us improve</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setShowFeedbackModal(false)}
+                    className="p-2 hover:bg-natural-bg dark:hover:bg-natural-bg-dark rounded-full transition-colors"
+                  >
+                    <X className="w-5 h-5 text-natural-ink-light dark:text-natural-ink-light-dark" />
+                  </button>
+                </div>
+
+                <div className="space-y-6">
+                  <div>
+                    <label className="text-xs font-bold text-natural-ink-light dark:text-natural-ink-light-dark uppercase tracking-widest mb-3 block">
+                      Type of feedback
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button 
+                        onClick={() => setFeedbackType('suggestion')}
+                        className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex flex-col items-center gap-2 ${feedbackType === 'suggestion' ? 'bg-natural-sage/10 border-natural-sage text-natural-sage' : 'border-natural-border dark:border-natural-border-dark text-natural-ink-light dark:text-natural-ink-light-dark hover:border-natural-clay/30'}`}
+                      >
+                        <ThumbsUp className="w-4 h-4" />
+                        Suggestion
+                      </button>
+                      <button 
+                        onClick={() => setFeedbackType('bug')}
+                        className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex flex-col items-center gap-2 ${feedbackType === 'bug' ? 'bg-red-50 dark:bg-red-900/20 border-red-500 text-red-500' : 'border-natural-border dark:border-natural-border-dark text-natural-ink-light dark:text-natural-ink-light-dark hover:border-natural-clay/30'}`}
+                      >
+                        <Flag className="w-4 h-4" />
+                        Issue
+                      </button>
+                      <button 
+                        onClick={() => setFeedbackType('other')}
+                        className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex flex-col items-center gap-2 ${feedbackType === 'other' ? 'bg-natural-clay/10 border-natural-clay text-natural-clay' : 'border-natural-border dark:border-natural-border-dark text-natural-ink-light dark:text-natural-ink-light-dark hover:border-natural-clay/30'}`}
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        Other
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-natural-ink-light dark:text-natural-ink-light-dark uppercase tracking-widest mb-3 block">
+                      Message
+                    </label>
+                    <textarea 
+                      value={feedbackBody}
+                      onChange={(e) => setFeedbackBody(e.target.value)}
+                      placeholder={feedbackType === 'bug' ? "What went wrong?" : "How can we make this better?"}
+                      className="w-full h-32 bg-natural-bg dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark rounded-2xl p-4 text-sm text-natural-ink dark:text-natural-ink-dark focus:border-natural-sage focus:ring-1 focus:ring-natural-sage outline-none transition-all resize-none"
+                    />
+                  </div>
+
+                  <button 
+                    onClick={handleFeedbackSubmit}
+                    disabled={!feedbackBody.trim() || isSubmittingFeedback}
+                    className="w-full bg-natural-ink dark:bg-natural-ink-dark text-white py-4 rounded-2xl font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
+                  >
+                    {isSubmittingFeedback ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        Submit Feedback
+                        <ChevronRight className="w-5 h-5" />
+                      </>
+                    )}
+                  </button>
+                  <p className="text-[10px] text-center text-natural-ink-light dark:text-natural-ink-light-dark">
+                    Your current plan will be shared with the developer to help diagnose the issue.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* AI Assistant Toggle Button */}
+      <div className="fixed bottom-6 right-6 z-[120] no-print">
+        <motion.button
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
+          onClick={() => setIsChatOpen(!isChatOpen)}
+          className={`w-14 h-14 rounded-full shadow-2xl flex items-center justify-center transition-colors ${
+            isChatOpen 
+              ? "bg-natural-clay text-white" 
+              : "bg-natural-sage text-white"
+          }`}
+        >
+          {isChatOpen ? <X className="w-6 h-6" /> : <MessageSquare className="w-6 h-6" />}
+          
+          {!isChatOpen && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full border-2 border-white dark:border-natural-paper-dark"
+            />
+          )}
+        </motion.button>
+      </div>
+
+      {/* AI Assistant Side Panel */}
+      <AnimatePresence>
+        {isChatOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsChatOpen(false)}
+              className="fixed inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm z-[110] no-print"
+            />
+            <motion.div 
+              initial={{ x: '100%', opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: '100%', opacity: 0 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed right-0 top-0 bottom-0 w-full max-w-sm sm:max-w-md bg-natural-paper dark:bg-natural-paper-dark shadow-2xl z-[111] no-print flex flex-col transition-colors border-l dark:border-natural-border-dark"
+            >
+              <div className="p-4 sm:p-6 border-b border-natural-border dark:border-natural-border-dark bg-natural-sage/5 dark:bg-natural-sage/10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-natural-sage rounded-xl flex items-center justify-center shadow-lg rotate-3">
+                      <Sparkles className="w-6 h-6 text-white" />
+                    </div>
+                    <div>
+                      <h2 className="font-serif text-lg italic font-bold text-natural-ink dark:text-natural-ink-dark">Teaching Assistant</h2>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                        <p className="text-natural-ink-light dark:text-natural-ink-light-dark text-[10px] uppercase tracking-widest font-bold">Online & Ready</p>
+                      </div>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setIsChatOpen(false)}
+                    className="p-2 hover:bg-natural-bg dark:hover:bg-natural-bg-dark rounded-full transition-colors"
+                  >
+                    <ArrowLeft className="w-6 h-6 text-natural-ink-light dark:text-natural-ink-light-dark" />
+                  </button>
+                </div>
+              </div>
+
+              <div 
+                ref={chatScrollRef}
+                className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-natural-bg/30 dark:bg-natural-bg-dark/30"
+              >
+                {chatMessages.map((msg, idx) => (
+                  <motion.div
+                    key={idx}
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div className={`max-w-[85%] p-3 sm:p-4 rounded-2xl shadow-sm ${
+                      msg.role === 'user' 
+                        ? "bg-natural-sage text-white rounded-tr-none" 
+                        : "bg-white dark:bg-natural-paper-dark text-natural-ink dark:text-natural-ink-dark border border-natural-border dark:border-natural-border-dark rounded-tl-none"
+                    }`}>
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">
+                        {msg.parts[0].text}
+                      </p>
+                    </div>
+                  </motion.div>
+                ))}
+                {isChatLoading && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex justify-start"
+                  >
+                    <div className="bg-white dark:bg-natural-paper-dark p-4 rounded-2xl rounded-tl-none border border-natural-border dark:border-natural-border-dark shadow-sm flex items-center gap-2">
+                      <div className="flex gap-1">
+                        <div className="w-1.5 h-1.5 bg-natural-sage rounded-full animate-bounce [animation-delay:-0.3s]" />
+                        <div className="w-1.5 h-1.5 bg-natural-sage rounded-full animate-bounce [animation-delay:-0.15s]" />
+                        <div className="w-1.5 h-1.5 bg-natural-sage rounded-full animate-bounce" />
+                      </div>
+                      <span className="text-[10px] uppercase tracking-widest font-bold text-natural-ink-light dark:text-natural-ink-light-dark">AI is thinking</span>
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+
+              <div className="p-4 sm:p-6 bg-white dark:bg-natural-paper-dark border-t border-natural-border dark:border-natural-border-dark">
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleChatSend();
+                  }}
+                  className="relative"
+                >
+                  <textarea
+                    value={chatInputText}
+                    onChange={(e) => setChatInputText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleChatSend();
+                      }
+                    }}
+                    placeholder="Ask about lesson planning or app features..."
+                    className="w-full bg-natural-bg dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark rounded-2xl px-4 py-3 pr-14 text-sm text-natural-ink dark:text-natural-ink-dark focus:border-natural-sage focus:ring-1 focus:ring-natural-sage outline-none transition-all resize-none h-20 sm:h-24"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!chatInputText.trim() || isChatLoading}
+                    className="absolute right-3 bottom-3 p-2 bg-natural-sage text-white rounded-xl shadow-lg hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                  >
+                    <Send className="w-5 h-5" />
+                  </button>
+                </form>
+                <p className="mt-3 text-[10px] text-center text-natural-ink-light dark:text-natural-ink-light-dark">
+                  Press Enter to send. Always verify AI-generated content.
+                </p>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* Archives Drawer */}
       <AnimatePresence>
@@ -2963,9 +3395,14 @@ const SettingsView = ({ userConfig, setUserConfig, onSuccess }: { userConfig: Us
     e.preventDefault();
     setSaving(true);
     try {
-      await saveUserConfig(auth.currentUser!.uid, { 
+      await saveUserConfig(auth.currentUser!.uid, {
         geminiApiKey: apiKey,
-        apiKeys: apiKeys.filter(k => !!k) 
+        apiKeys: apiKeys.filter(k => !!k)
+      });
+      setUserConfig({
+        ...userConfig,
+        geminiApiKey: apiKey,
+        apiKeys: apiKeys.filter(k => !!k)
       });
       setSaveSuccess(true);
       setTimeout(() => {

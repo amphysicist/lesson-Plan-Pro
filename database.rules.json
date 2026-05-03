@@ -22,6 +22,12 @@
         ".write": "auth != null && (!data.exists() || data.child('authorId').val() === auth.uid)"
       },
       ".indexOn": ["authorId"]
+    },
+    "feedback": {
+      ".read": "auth != null && (auth.token.email === 'amphysicist.bl@gmail.com' || root.child('user_configs').child(auth.uid).child('isAdmin').val() === true)",
+      "$feedbackId": {
+        ".write": "auth != null"
+      }
     }
   }
 }

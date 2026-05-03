@@ -195,6 +195,35 @@ export async function deleteArchivedPlan(id: string) {
   }
 }
 
+export async function submitFeedback(feedback: {
+  feedbackType: 'bug' | 'suggestion' | 'other';
+  message: string;
+  planSnapshot?: any;
+}) {
+  if (!auth.currentUser) {
+    // If not logged in, we can still allow feedback if we want, but name it anonymous
+    // or just require login for better management.
+    // Let's require login to prevent spam.
+    await signInWithPopup(auth, googleProvider);
+  }
+  
+  if (!auth.currentUser) throw new Error("Auth required to submit feedback");
+
+  try {
+    const feedbackRef = ref(db, 'feedback');
+    const newFeedbackRef = push(feedbackRef);
+    await set(newFeedbackRef, {
+      ...feedback,
+      userId: auth.currentUser.uid,
+      userEmail: auth.currentUser.email,
+      createdAt: serverTimestamp()
+    });
+    return newFeedbackRef.key;
+  } catch (err: any) {
+    return handleFirebaseError(err, 'create', 'feedback');
+  }
+}
+
 export async function getSharedPlan(id: string): Promise<SharedPlan | null> {
   try {
     const snapshot = await get(ref(db, `lessonPlans/${id}`));
