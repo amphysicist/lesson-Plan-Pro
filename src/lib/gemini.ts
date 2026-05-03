@@ -17,6 +17,38 @@ function truncateString(str: string): string {
   return str || "";
 }
 
+export async function validateApiKey(key: string): Promise<{ valid: boolean; error?: string }> {
+  if (!key || key.trim().length === 0) return { valid: false, error: "Key is empty" };
+  
+  // Format check
+  if (!key.startsWith("AIzaSy")) {
+    return { valid: false, error: "Invalid format: Gemini keys usually start with 'AIzaSy'" };
+  }
+  
+  if (key.length < 35) {
+    return { valid: false, error: "Invalid length: Key is too short" };
+  }
+
+  try {
+    const genAI = new GoogleGenAI({ apiKey: key });
+    // Minimal request to verify key functionality
+    await genAI.models.generateContent({ 
+      model: "gemini-1.5-flash", 
+      contents: [{ role: "user", parts: [{ text: "hi" }] }] 
+    });
+    return { valid: true };
+  } catch (err: any) {
+    const msg = String(err?.message || "").toLowerCase();
+    if (msg.includes("api_key_invalid") || msg.includes("invalid api key")) {
+      return { valid: false, error: "This API Key is invalid or has been revoked." };
+    }
+    if (msg.includes("quota") || msg.includes("rate limit")) {
+      return { valid: true }; // Key is valid but quota is exhausted
+    }
+    return { valid: false, error: err.message || "Could not verify API key" };
+  }
+}
+
 async function getAI(userApiKey?: string, backupKeys: string[] = []) {
   // Collect all potential keys
   const keys: string[] = [];

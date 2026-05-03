@@ -89,7 +89,7 @@ import {
   SourceType,
   UserConfig
 } from "./types";
-import { generateLessonPlan, extractPlanInfo, generateLectureScript, searchResources, getSearchSuggestions, chatWithAssistant } from "./lib/gemini";
+import { generateLessonPlan, extractPlanInfo, generateLectureScript, searchResources, getSearchSuggestions, chatWithAssistant, validateApiKey } from "./lib/gemini";
 import { 
   sharePlan, 
   getSharedPlan, 
@@ -3065,92 +3065,104 @@ ${lectureScript.summary}
               className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             />
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-md bg-natural-paper dark:bg-natural-paper-dark rounded-3xl shadow-2xl border border-natural-border dark:border-natural-border-dark overflow-hidden transition-colors"
+              exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              className="relative w-full max-w-lg bg-white dark:bg-zinc-900 rounded-[2.5rem] shadow-[0_32px_64px_-16px_rgba(0,0,0,0.25)] border border-natural-border dark:border-natural-border-dark overflow-hidden transition-all duration-500"
             >
-              <div className="p-6 sm:p-8">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-natural-clay/10 rounded-xl flex items-center justify-center">
-                      <MessageSquare className="w-6 h-6 text-natural-clay" />
+              {/* Decorative top bar */}
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-natural-sage via-natural-clay to-natural-sage opacity-80" />
+              
+              <div className="p-8 sm:p-10">
+                <div className="flex items-center justify-between mb-8">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 bg-natural-clay/10 rounded-2xl flex items-center justify-center rotate-3 border border-natural-clay/10">
+                      <MessageSquare className="w-6 h-6 text-natural-clay -rotate-3" />
                     </div>
                     <div>
-                      <h3 className="text-xl font-serif font-bold text-natural-ink dark:text-natural-ink-dark italic">Feedback</h3>
-                      <p className="text-[10px] uppercase tracking-widest text-natural-ink-light dark:text-natural-ink-light-dark font-bold">Help us improve</p>
+                      <h3 className="text-2xl font-serif font-bold text-natural-ink dark:text-natural-ink-dark italic leading-tight">Your Feedback</h3>
+                      <p className="text-[10px] uppercase tracking-[0.2em] text-natural-ink-light/70 dark:text-natural-ink-light-dark/70 font-bold">Help shape the future</p>
                     </div>
                   </div>
                   <button 
                     onClick={() => setShowFeedbackModal(false)}
-                    className="p-2 hover:bg-natural-bg dark:hover:bg-natural-bg-dark rounded-full transition-colors"
+                    className="p-3 hover:bg-natural-bg dark:hover:bg-natural-bg-dark rounded-full transition-all hover:rotate-90 duration-300 group"
                   >
-                    <X className="w-5 h-5 text-natural-ink-light dark:text-natural-ink-light-dark" />
+                    <X className="w-5 h-5 text-natural-ink-light group-hover:text-natural-ink" />
                   </button>
                 </div>
 
-                <div className="space-y-6">
+                <div className="space-y-8">
                   <div>
-                    <label className="text-xs font-bold text-natural-ink-light dark:text-natural-ink-light-dark uppercase tracking-widest mb-3 block">
-                      Type of feedback
+                    <label className="text-[10px] font-bold text-natural-ink-light dark:text-natural-ink-light-dark uppercase tracking-[1.5px] mb-4 block">
+                      What are you feeling?
                     </label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-3">
                       <button 
                         onClick={() => setFeedbackType('suggestion')}
-                        className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex flex-col items-center gap-2 ${feedbackType === 'suggestion' ? 'bg-natural-sage/10 border-natural-sage text-natural-sage' : 'border-natural-border dark:border-natural-border-dark text-natural-ink-light dark:text-natural-ink-light-dark hover:border-natural-clay/30'}`}
+                        className={`group py-3 px-4 rounded-2xl border text-xs font-bold transition-all flex flex-col items-center gap-2 relative overflow-hidden ${feedbackType === 'suggestion' ? 'bg-natural-sage/5 border-natural-sage text-natural-sage shadow-[0_8px_16px_-6px_rgba(141,153,106,0.2)]' : 'border-natural-border/60 dark:border-natural-border-dark/60 text-natural-ink-light/80 hover:border-natural-sage/40 hover:bg-natural-bg/50'}`}
                       >
-                        <ThumbsUp className="w-4 h-4" />
+                        <ThumbsUp className={`w-4 h-4 transition-transform ${feedbackType === 'suggestion' ? 'scale-110' : 'group-hover:scale-110'}`} />
                         Suggestion
                       </button>
                       <button 
                         onClick={() => setFeedbackType('bug')}
-                        className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex flex-col items-center gap-2 ${feedbackType === 'bug' ? 'bg-red-50 dark:bg-red-900/20 border-red-500 text-red-500' : 'border-natural-border dark:border-natural-border-dark text-natural-ink-light dark:text-natural-ink-light-dark hover:border-natural-clay/30'}`}
+                        className={`group py-3 px-4 rounded-2xl border text-xs font-bold transition-all flex flex-col items-center gap-2 relative overflow-hidden ${feedbackType === 'bug' ? 'bg-red-50/50 dark:bg-red-900/10 border-red-400 text-red-500 shadow-[0_8px_16px_-6px_rgba(239,68,68,0.15)]' : 'border-natural-border/60 dark:border-natural-border-dark/60 text-natural-ink-light/80 hover:border-red-400/40 hover:bg-natural-bg/50'}`}
                       >
-                        <Flag className="w-4 h-4" />
+                        <Flag className={`w-4 h-4 transition-transform ${feedbackType === 'bug' ? 'scale-110' : 'group-hover:scale-110'}`} />
                         Issue
                       </button>
                       <button 
                         onClick={() => setFeedbackType('other')}
-                        className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex flex-col items-center gap-2 ${feedbackType === 'other' ? 'bg-natural-clay/10 border-natural-clay text-natural-clay' : 'border-natural-border dark:border-natural-border-dark text-natural-ink-light dark:text-natural-ink-light-dark hover:border-natural-clay/30'}`}
+                        className={`group py-3 px-4 rounded-2xl border text-xs font-bold transition-all flex flex-col items-center gap-2 relative overflow-hidden ${feedbackType === 'other' ? 'bg-natural-clay/5 border-natural-clay text-natural-clay shadow-[0_8px_16px_-6px_rgba(189,163,131,0.2)]' : 'border-natural-border/60 dark:border-natural-border-dark/60 text-natural-ink-light/80 hover:border-natural-clay/40 hover:bg-natural-bg/50'}`}
                       >
-                        <RotateCcw className="w-4 h-4" />
+                        <RotateCcw className={`w-4 h-4 transition-transform ${feedbackType === 'other' ? 'scale-110' : 'group-hover:scale-110'}`} />
                         Other
                       </button>
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-natural-ink-light dark:text-natural-ink-light-dark uppercase tracking-widest mb-3 block">
-                      Message
+                    <label className="text-[10px] font-bold text-natural-ink-light dark:text-natural-ink-light-dark uppercase tracking-[1.5px] mb-4 block">
+                      The Details
                     </label>
                     <textarea 
                       value={feedbackBody}
                       onChange={(e) => setFeedbackBody(e.target.value)}
-                      placeholder={feedbackType === 'bug' ? "What went wrong?" : "How can we make this better?"}
-                      className="w-full h-32 bg-natural-bg dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark rounded-2xl p-4 text-sm text-natural-ink dark:text-natural-ink-dark focus:border-natural-sage focus:ring-1 focus:ring-natural-sage outline-none transition-all resize-none"
+                      placeholder={feedbackType === 'bug' ? "What went wrong? Describe the steps to reproduce..." : "Tell us your thoughts..."}
+                      className="w-full h-40 bg-gray-50/50 dark:bg-zinc-800/50 border border-natural-border dark:border-natural-border-dark rounded-3xl p-5 text-sm text-natural-ink dark:text-natural-ink-dark focus:border-natural-sage focus:ring-4 focus:ring-natural-sage/5 outline-none transition-all resize-none shadow-inner"
                     />
                   </div>
 
-                  <button 
-                    onClick={handleFeedbackSubmit}
-                    disabled={!feedbackBody.trim() || isSubmittingFeedback}
-                    className="w-full bg-natural-ink dark:bg-natural-ink-dark text-white py-4 rounded-2xl font-bold hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
-                  >
-                    {isSubmittingFeedback ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Submitting...
-                      </>
-                    ) : (
-                      <>
-                        Submit Feedback
-                        <ChevronRight className="w-5 h-5" />
-                      </>
-                    )}
-                  </button>
-                  <p className="text-[10px] text-center text-natural-ink-light dark:text-natural-ink-light-dark">
-                    Your current plan will be shared with the developer to help diagnose the issue.
-                  </p>
+                  <div className="space-y-4">
+                    <button 
+                      onClick={handleFeedbackSubmit}
+                      disabled={!feedbackBody.trim() || isSubmittingFeedback}
+                      className="group w-full relative h-[60px] bg-natural-ink dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-3xl font-bold hover:shadow-[0_20px_40px_-12px_rgba(0,0,0,0.3)] disabled:opacity-50 disabled:cursor-not-allowed transition-all overflow-hidden"
+                    >
+                      <motion.div 
+                        className="absolute inset-0 bg-gradient-to-r from-natural-sage/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"
+                        animate={{ x: isSubmittingFeedback ? ['0%', '100%'] : '0%' }}
+                        transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                      />
+                      <div className="relative flex items-center justify-center gap-3">
+                        {isSubmittingFeedback ? (
+                          <>
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <span>Sending to Team...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>Send Feedback</span>
+                            <ChevronRight className="w-5 h-5 transition-transform group-hover:translate-x-1" />
+                          </>
+                        )}
+                      </div>
+                    </button>
+                    <p className="text-[10px] text-center text-natural-ink-light/70 dark:text-natural-ink-light-dark/70 italic px-4">
+                      Your current plan and context will be shared with the developer to help diagnose issues effectively.
+                    </p>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -3390,9 +3402,42 @@ const SettingsView = ({ userConfig, setUserConfig, onSuccess }: { userConfig: Us
   const [showKey, setShowKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [validationError, setValidationError] = useState("");
+  const [validationSuccess, setValidationSuccess] = useState(false);
+
+  const handleVerify = async () => {
+    if (!apiKey.trim()) {
+      setValidationError("Please enter an API key first.");
+      return;
+    }
+    setVerifying(true);
+    setValidationError("");
+    setValidationSuccess(false);
+    
+    try {
+      const result = await validateApiKey(apiKey);
+      if (result.valid) {
+        setValidationSuccess(true);
+      } else {
+        setValidationError(result.error || "Invalid API key.");
+      }
+    } catch (err) {
+      setValidationError("Verification failed. Please check your internet connection.");
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Quick format check before saving
+    if (apiKey && !apiKey.startsWith("AIzaSy")) {
+      setValidationError("Invalid API Key format. It should start with 'AIzaSy'.");
+      return;
+    }
+
     setSaving(true);
     try {
       await saveUserConfig(auth.currentUser!.uid, {
@@ -3451,9 +3496,15 @@ const SettingsView = ({ userConfig, setUserConfig, onSuccess }: { userConfig: Us
               <input 
                 type={showKey ? "text" : "password"}
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) => {
+                  setApiKey(e.target.value);
+                  setValidationError("");
+                  setValidationSuccess(false);
+                }}
                 placeholder="Enter your Primary Gemini API Key..."
-                className="w-full pl-4 pr-12 py-3 bg-natural-bg dark:bg-natural-bg-dark border border-natural-border dark:border-natural-border-dark rounded-xl focus:ring-2 focus:ring-natural-sage/20 focus:border-natural-sage outline-none transition-all text-natural-ink dark:text-natural-ink-dark"
+                className={`w-full pl-4 pr-12 py-3 bg-natural-bg dark:bg-natural-bg-dark border rounded-xl focus:ring-2 focus:ring-natural-sage/20 outline-none transition-all text-natural-ink dark:text-natural-ink-dark
+                  ${validationError ? 'border-red-400 focus:border-red-500' : validationSuccess ? 'border-green-400 focus:border-green-500' : 'border-natural-border dark:border-natural-border-dark focus:border-natural-sage'}
+                `}
               />
               <button 
                 type="button"
@@ -3461,6 +3512,30 @@ const SettingsView = ({ userConfig, setUserConfig, onSuccess }: { userConfig: Us
                 className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-natural-ink-light hover:text-natural-ink transition-colors"
               >
                 {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between min-h-[24px]">
+              <div>
+                {validationError && (
+                  <p className="text-[10px] text-red-500 font-bold flex items-center gap-1 animate-pulse">
+                    <AlertCircle className="w-3 h-3" /> {validationError}
+                  </p>
+                )}
+                {validationSuccess && (
+                  <p className="text-[10px] text-green-600 font-bold flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> API Key Verified & Working!
+                  </p>
+                )}
+              </div>
+              <button 
+                type="button"
+                onClick={handleVerify}
+                disabled={verifying || !apiKey}
+                className="text-[10px] font-bold text-natural-sage hover:text-natural-sage/80 disabled:opacity-50 flex items-center gap-1 uppercase tracking-wider"
+              >
+                {verifying ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldCheck className="w-3 h-3" />}
+                {verifying ? "Verifying..." : "Verify Key"}
               </button>
             </div>
             
@@ -3509,8 +3584,11 @@ const SettingsView = ({ userConfig, setUserConfig, onSuccess }: { userConfig: Us
 
             <div className="space-y-4 pt-4">
               <p className="text-xs font-medium text-natural-ink/80 flex items-center gap-2">
-                <Sparkles className="w-3 h-3 text-indigo-500" />
-                Follow these steps to get your API key:
+                <ShieldAlert className="w-3 h-3 text-red-500" />
+                Wait! Only Google Gemini API keys work here.
+              </p>
+              <p className="text-[10px] text-natural-ink-light leading-relaxed">
+                Do NOT enter OpenAI, Claude, or your phone number. Those will not work.
               </p>
               <ol className="text-[11px] space-y-3 text-natural-ink-light leading-relaxed list-decimal pl-4">
                 <li className="pl-1">Visit <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline font-bold">Google AI Studio</a>.</li>

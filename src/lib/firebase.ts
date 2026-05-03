@@ -29,15 +29,17 @@ import { UserConfig } from '../types';
 
 // Use environment variables if available (prefixed with VITE_ for client-side Vite)
 // otherwise fallback to the JSON config file.
+const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID || firebaseConfigJSON.projectId || 'gen-lang-client-0206770265';
+
 export const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || firebaseConfigJSON.apiKey,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || firebaseConfigJSON.authDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'ai-studio-applet-webapp-75c21',
+  projectId,
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || firebaseConfigJSON.storageBucket,
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || firebaseConfigJSON.messagingSenderId,
   appId: import.meta.env.VITE_FIREBASE_APP_ID || firebaseConfigJSON.appId,
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || firebaseConfigJSON.measurementId,
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || `https://ai-studio-applet-webapp-75c21-default-rtdb.asia-southeast1.firebasedatabase.app`,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || `https://${projectId}-default-rtdb.firebaseio.com`,
 };
 
 const app = initializeApp(firebaseConfig);

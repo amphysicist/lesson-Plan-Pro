@@ -26,7 +26,8 @@
     "feedback": {
       ".read": "auth != null && (auth.token.email === 'amphysicist.bl@gmail.com' || root.child('user_configs').child(auth.uid).child('isAdmin').val() === true)",
       "$feedbackId": {
-        ".write": "auth != null"
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['feedbackType', 'message', 'userId', 'createdAt'])"
       }
     }
   }
